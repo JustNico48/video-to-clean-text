@@ -1,7 +1,6 @@
 streamlit
-PyPDF2
+fpdf2
 python-docx
-google-generativeai
-youtube-transcript-api
+Pillow
 requests
 beautifulsoup4

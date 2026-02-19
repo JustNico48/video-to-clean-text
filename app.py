@@ -1,175 +1,131 @@
 import streamlit as st
 import re
-from textblob import TextBlob
-from rake_nltk import Rake
-import nltk
+import google.generativeai as genai
 from PyPDF2 import PdfReader
 from docx import Document
-from deep_translator import GoogleTranslator
 
-# --- SETUP RISORSE ---
-@st.cache_resource
-def download_nltk_data():
-    try:
-        nltk.download('punkt', quiet=True)
-        nltk.download('stopwords', quiet=True)
-        nltk.download('punkt_tab', quiet=True)
-    except: pass
+# --- CONFIGURAZIONE PAGINA E DESIGN ---
+st.set_page_config(page_title="CleanScript AI 5.0 | God Mode", page_icon="🧠", layout="wide")
 
-download_nltk_data()
-
-st.set_page_config(page_title="CleanScript AI | Ultimate Studio", page_icon="⚡", layout="wide")
-
-# --- CSS FLUIDO ---
 st.markdown("""
     <style>
-    .metric-card { background-color: var(--secondary-background-color); padding: 20px; border-radius: 12px; border: 1px solid rgba(128, 128, 128, 0.2); text-align: center; }
-    .metric-title { font-size: 0.9rem; color: var(--text-color); opacity: 0.7; text-transform: uppercase; letter-spacing: 1px;}
-    .metric-value { font-size: 1.8rem; font-weight: 800; color: var(--text-color); margin-top: 5px; }
-    .stButton>button { border-radius: 8px; font-weight: 600; transition: all 0.2s; border: 1px solid var(--primary-color); width: 100%; }
-    .stButton>button:hover { border-color: var(--primary-color); color: var(--primary-color); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] { border-radius: 8px 8px 0 0; padding: 10px 20px; }
-    .step-box { background: rgba(37, 99, 235, 0.1); padding: 15px; border-radius: 8px; border-left: 4px solid #2563eb; margin-bottom: 15px; }
+    .stApp { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
+    .feature-card { background: white; padding: 25px; border-radius: 16px; border: 1px solid #E2E8F0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .stButton>button { background-color: #2563EB !important; color: white !important; border-radius: 12px; padding: 12px; font-weight: 700; border: none; transition: 0.3s; width: 100%; }
+    .stButton>button:hover { background-color: #1D4ED8 !important; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2); }
+    .stTextArea textarea { border-radius: 12px; border: 1px solid #E2E8F0; }
     </style>
     """, unsafe_allow_html=True)
 
-if 'raw_text' not in st.session_state: st.session_state['raw_text'] = ""
-if 'processed_text' not in st.session_state: st.session_state['processed_text'] = ""
+# --- SETUP INTELLIGENZA ARTIFICIALE ---
+# Controlla se hai inserito la chiave segreta
+try:
+    API_KEY = st.secrets["GEMINI_API_KEY"]
+    genai.configure(api_key=API_KEY)
+    # Usiamo il modello "flash" che è ultra veloce e gratuito
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    ai_ready = True
+except Exception as e:
+    st.error("⚠️ Chiave API non trovata! Vai nei Secrets di Streamlit e inserisci GEMINI_API_KEY.")
+    ai_ready = False
 
-# --- SIDEBAR: STRUMENTI AVANZATI ---
-with st.sidebar:
-    st.title("🛠️ Strumenti Avanzati")
-    st.info("Questi filtri si applicano al testo elaborato.")
+# --- LOGICA DEL MOTORE IA ---
+def process_with_ai(text, mode, language):
+    if not text.strip(): return "Errore: Testo vuoto."
     
-    st.subheader("Trova & Sostituisci")
-    find_word = st.text_input("Parola da trovare:")
-    replace_word = st.text_input("Sostituisci con:")
-    if st.button("Applica Sostituzione") and st.session_state['processed_text']:
-        st.session_state['processed_text'] = st.session_state['processed_text'].replace(find_word, replace_word)
-        st.success("Sostituito!")
+    # Prompt da vero Copywriter/Analista
+    prompts = {
+        "Pulizia e Correzione Perfetta": "Sei un editor professionista. Pulisci il testo seguente da errori grammaticali, tic verbali, ripetizioni e timestamp. Rendi il testo fluido ma mantieni il significato esatto e il tono originale. Non inventare nulla.",
+        "Riassunto Esecutivo (TL;DR)": "Sei un analista aziendale. Leggi il seguente testo e crea un riassunto esecutivo. Struttura: 1. Un paragrafo breve sul succo del discorso. 2. Una lista puntata con i 3-5 concetti chiave.",
+        "Articolo Blog SEO": "Sei un SEO Copywriter esperto. Trasforma questa trascrizione in un articolo di blog accattivante. Aggiungi un Titolo forte (H1), un'introduzione gancio, dividi in paragrafi con sottotitoli (H2), e chiudi con una conclusione o call to action.",
+        "Post Social Virale (LinkedIn/X)": "Sei un Social Media Manager. Estrai il concetto più interessante da questo testo e crea un post per LinkedIn/X. Usa frasi brevi, spaziature ampie, un hook iniziale forte, e aggiungi 3 hashtag rilevanti alla fine.",
+        "Meeting Manager (Action Items)": "Sei un Project Manager. Analizza questa trascrizione di una riunione o discorso. Crea una lista chiara: 1. Argomenti discussi. 2. Decisioni prese. 3. Action Items (Cose da fare e, se menzionato, da chi)."
+    }
+    
+    prompt_base = prompts.get(mode, prompts["Pulizia e Correzione Perfetta"])
+    full_prompt = f"{prompt_base}\n\nREGOLE IMPORTANTI:\nScrivi la risposta ESCLUSIVAMENTE in lingua {language}.\n\nTESTO DA ANALIZZARE:\n{text}"
+    
+    try:
+        response = model.generate_content(full_prompt)
+        return response.text
+    except Exception as e:
+        return f"Errore nell'elaborazione IA: {str(e)}"
 
-    st.subheader("Filtro Parole")
-    words_to_remove = st.text_input("Da rimuovere (separate da virgola):", placeholder="ehm, cioè, allora")
-    if st.button("Pulisci Parole") and st.session_state['processed_text']:
-        text_temp = st.session_state['processed_text']
-        for w in [x.strip() for x in words_to_remove.split(',') if x.strip()]:
-            text_temp = re.sub(rf'\b{w}\b', '', text_temp, flags=re.IGNORECASE)
-        st.session_state['processed_text'] = " ".join(text_temp.split())
-        st.success("Pulizia completata!")
-        
-    st.subheader("Casing")
-    col_c1, col_c2, col_c3 = st.columns(3)
-    if col_c1.button("ABC") and st.session_state['processed_text']: st.session_state['processed_text'] = st.session_state['processed_text'].upper()
-    if col_c2.button("abc") and st.session_state['processed_text']: st.session_state['processed_text'] = st.session_state['processed_text'].lower()
-    if col_c3.button("Abc") and st.session_state['processed_text']: st.session_state['processed_text'] = st.session_state['processed_text'].title()
+# --- INTERFACCIA UTENTE ---
+st.title("🧠 CleanScript AI 5.0")
+st.markdown("<p style='color: #64748B; font-size: 1.1em;'>Il primo Content Hub potenziato da Intelligenza Artificiale Reale.</p>", unsafe_allow_html=True)
 
-    st.divider()
-    st.markdown("[☕ Supporta il server](https://paypal.me/tuolink)")
+if 'raw_text' not in st.session_state: st.session_state['raw_text'] = ""
 
-# --- UI PRINCIPALE ---
-st.title("⚡ CleanScript AI Studio")
-st.markdown("Importa, analizza e trasforma i tuoi contenuti in modo impeccabile.")
-
+st.markdown('<div class="feature-card">', unsafe_allow_html=True)
 tab_yt, tab_file, tab_manual = st.tabs(["🎥 Trascrizione YouTube", "📁 Carica Documento", "✍️ Testo Libero"])
 
 with tab_yt:
-    st.markdown("""
-    <div class="step-box">
-        <b>Come aggirare i blocchi di YouTube:</b><br>
-        1. Vai sul video YouTube da PC e clicca su <b>"... Altro"</b> (sotto il titolo).<br>
-        2. Clicca su <b>"Mostra Trascrizione"</b>.<br>
-        3. Fai Copia/Incolla di tutto il testo qui sotto. Il nostro motore pulirà i numeri e i timestamp automaticamente!
-    </div>
-    """, unsafe_allow_html=True)
-    m_txt_yt = st.text_area("Incolla qui la trascrizione sporca di YouTube:", height=200, key="yt_input")
-    if st.button("PULISCI E ANALIZZA YOUTUBE", use_container_width=True):
-        st.session_state['raw_text'] = m_txt_yt
-        st.session_state['processed_text'] = m_txt_yt
+    st.info("💡 Vai su YouTube da PC -> Clicca '... Altro' sotto il video -> 'Mostra Trascrizione' -> Copia e Incolla qui.")
+    m_txt_yt = st.text_area("Incolla qui la trascrizione sporca di YouTube:", height=150, key="yt_in")
+    if st.button("CARICA TESTO YOUTUBE", key="btn_yt"): st.session_state['raw_text'] = m_txt_yt
 
 with tab_file:
     up_file = st.file_uploader("Formati supportati: PDF, DOCX, TXT", type=['pdf', 'docx', 'txt'])
-    if up_file and st.button("ELABORA FILE", use_container_width=True):
+    if up_file and st.button("LEGGI FILE"):
         with st.spinner('Lettura in corso...'):
             if up_file.type == "application/pdf": st.session_state['raw_text'] = "".join([p.extract_text() for p in PdfReader(up_file).pages])
             elif up_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document": st.session_state['raw_text'] = " ".join([p.text for p in Document(up_file).paragraphs])
             else: st.session_state['raw_text'] = up_file.read().decode("utf-8")
-            st.session_state['processed_text'] = st.session_state['raw_text']
 
 with tab_manual:
-    m_txt = st.text_area("Incolla qui appunti, meeting Zoom o testi grezzi:", height=200, key="manual_input")
-    if st.button("ACQUISISCI TESTO", use_container_width=True):
-        st.session_state['raw_text'] = m_txt
-        st.session_state['processed_text'] = m_txt
+    m_txt = st.text_area("Incolla appunti o testi grezzi:", height=150, key="man_in")
+    if st.button("CARICA TESTO", key="btn_man"): st.session_state['raw_text'] = m_txt
 
-# --- MOTORE DI ANALISI E OUTPUT ---
-if st.session_state['processed_text']:
-    st.divider()
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --- PANNELLO DI CONTROLLO IA ---
+if st.session_state['raw_text'] and ai_ready:
+    st.markdown("---")
+    st.subheader("⚙️ Cosa vuoi farci con questo testo?")
     
-    current_text = st.session_state['processed_text']
-    # Super-Pulizia Timestamp (rimuove 00:00, [00:00], 00:00:00)
-    current_text = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', current_text)
-    current_text = re.sub(r'^\d{1,2}:\d{2}\s', '', current_text, flags=re.MULTILINE)
-    current_text = " ".join(current_text.split())
-    st.session_state['processed_text'] = current_text
-
-    col_f1, col_f2 = st.columns(2)
-    with col_f1:
-        target_lang = st.selectbox("🌍 Traduci Output:", ["Originale", "Italiano", "English", "Spanish", "French", "German"])
-        if target_lang != "Originale":
-            with st.spinner("Traduzione in corso..."):
-                try:
-                    chunks = [current_text[i:i+4500] for i in range(0, len(current_text), 4500)]
-                    translated_chunks = [GoogleTranslator(source='auto', target=target_lang.lower()).translate(chunk) for chunk in chunks]
-                    current_text = " ".join(translated_chunks)
-                    st.session_state['processed_text'] = current_text
-                except Exception as e: st.error(f"Errore: {e}")
-
-    with col_f2:
-        format_style = st.selectbox("📝 Stile Generazione:", ["Testo Pulito (Nessuna formattazione)", "Appunti puntati", "Struttura Blog SEO", "Post Social (LinkedIn/X)"])
-
-    display_text = current_text
-    if format_style == "Appunti puntati": display_text = "\n".join([f"- {s.strip()}" for s in current_text.split('. ') if len(s) > 5])
-    elif format_style == "Struttura Blog SEO": display_text = f"# Titolo Articolo\n\n## Introduzione\n{current_text[:400]}...\n\n## Sviluppo Principale\n{current_text[400:]}"
-    elif format_style == "Post Social (LinkedIn/X)": display_text = f"🚀 NUOVO INSIGHT\n\n{current_text[:300]}...\n\n👇 Scopri i dettagli.\n#content #ai #productivity"
-
-    words = len(display_text.split())
-    try:
-        sentiment_score = TextBlob(current_text).sentiment.polarity
-        mood = "Positivo 😊" if sentiment_score > 0.1 else "Neutrale 😐" if sentiment_score > -0.1 else "Negativo 😟"
-    except: mood = "N/D"
+    col_settings, col_action = st.columns([2, 1])
     
-    m1, m2, m3, m4 = st.columns(4)
-    m1.markdown(f'<div class="metric-card"><div class="metric-title">Parole</div><div class="metric-value">{words}</div></div>', unsafe_allow_html=True)
-    m2.markdown(f'<div class="metric-card"><div class="metric-title">Tempo Lettura</div><div class="metric-value">{max(1, words//200)}m</div></div>', unsafe_allow_html=True)
-    m3.markdown(f'<div class="metric-card"><div class="metric-title">Mood</div><div class="metric-value">{mood}</div></div>', unsafe_allow_html=True)
-    m4.markdown(f'<div class="metric-card"><div class="metric-title">Caratteri</div><div class="metric-value">{len(display_text)}</div></div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    out_col, info_col = st.columns([2, 1])
-    
-    with out_col:
-        st.subheader("Risultato Finale")
-        st.text_area("", display_text, height=400, label_visibility="collapsed")
+    with col_settings:
+        c1, c2 = st.columns(2)
+        ai_mode = c1.selectbox("🧠 Potere dell'IA:", [
+            "Pulizia e Correzione Perfetta", 
+            "Riassunto Esecutivo (TL;DR)", 
+            "Articolo Blog SEO", 
+            "Post Social Virale (LinkedIn/X)",
+            "Meeting Manager (Action Items)"
+        ])
+        ai_lang = c2.selectbox("🌍 Lingua Output:", ["Italiano", "English", "Español", "Français", "Deutsch"])
         
-        btn_c1, btn_c2, btn_c3 = st.columns(3)
-        btn_c1.download_button("📥 Scarica .txt", display_text, file_name="cleanscript.txt")
-        btn_c2.download_button("📝 Scarica .md", display_text, file_name="cleanscript.md")
-        if btn_c3.button("📋 Info Copia"): st.info("Clicca nel testo, premi Ctrl+A e Ctrl+C per copiare.")
+    with col_action:
+        st.write("") # Spazio per allineare il bottone
+        st.write("")
+        if st.button("✨ GENERA CON IA", use_container_width=True):
+            with st.spinner(f"Sto elaborando in modalità '{ai_mode}'..."):
+                # Pulizia base preventiva
+                clean_raw = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', st.session_state['raw_text'])
+                # Chiamata a Gemini
+                result = process_with_ai(clean_raw, ai_mode, ai_lang)
+                st.session_state['ai_result'] = result
 
-    with info_col:
-        st.subheader("Intelligenza SEO")
-        try:
-            r = Rake()
-            r.extract_keywords_from_text(current_text)
-            kw = r.get_ranked_phrases()[:6]
-            st.write("**Parole chiave:**")
-            for k in kw: st.code(k)
-            st.divider()
-            tags = " ".join([f"#{w.replace(' ', '')}" for w in kw[:4]])
-            st.info(f"**Hashtags:**\n{tags}")
-        except: st.write("Dati insufficienti.")
-
-st.markdown("---")
-st.caption("© 2026 CleanScript AI Studio | Elaborazione sicura e locale")
+# --- MOSTRA IL RISULTATO ---
+if 'ai_result' in st.session_state:
+    st.markdown("---")
+    res_col, side_col = st.columns([3, 1])
+    
+    with res_col:
+        st.subheader("🎯 Il tuo capolavoro è pronto")
+        st.text_area("", st.session_state['ai_result'], height=450, label_visibility="collapsed")
+        
+        b1, b2 = st.columns(2)
+        b1.download_button("📥 Scarica Risultato (.txt)", st.session_state['ai_result'], file_name="cleanscript_ai.txt")
+        if b2.button("📋 Info Copia"): st.info("Clicca nel testo, premi Ctrl+A e Ctrl+C per copiare.")
+        
+    with side_col:
+        st.markdown('<div class="feature-card">', unsafe_allow_html=True)
+        st.markdown("### 💎 Valore Generato")
+        st.write("L'Intelligenza Artificiale ha appena risparmiato ore del tuo tempo. Hai generato un testo di alta qualità pronto per essere pubblicato o utilizzato nel tuo lavoro.")
+        st.divider()
+        st.markdown("Se questo tool ti ha svoltato la giornata, considera di supportare i costi del server.")
+        st.markdown("[☕ **Offrimi un caffè**](https://paypal.me/tuolink)")
+        st.markdown('</div>', unsafe_allow_html=True)

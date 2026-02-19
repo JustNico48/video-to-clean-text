@@ -1,6 +1,4 @@
 streamlit
-textblob
-rake-nltk
 PyPDF2
 python-docx
-deep-translator
+google-generativeai

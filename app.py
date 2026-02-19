@@ -159,47 +159,53 @@ with main_col:
                 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- IL SISTEMA DI MONETIZZAZIONE (REWARDED AD) ---
+# --- IL SISTEMA DI MONETIZZAZIONE (VIDEO FORZATO 20 SECONDI) ---
     if st.session_state['input_data'] and not st.session_state['pdf_ready']:
         ad_placeholder = st.empty()
         
         with ad_placeholder.container():
-            st.markdown('<div class="clean-card" style="text-align: center; border-color: #6366F1;">', unsafe_allow_html=True)
-            st.markdown("<h3 style='margin-bottom: 10px;'>Generazione in corso... ⏳</h3>", unsafe_allow_html=True)
-            st.markdown("<p style='margin-bottom: 20px;'>Il nostro servizio è gratuito grazie agli sponsor. Il tuo PDF sarà pronto al termine del video.</p>", unsafe_allow_html=True)
+            st.markdown('<div class="clean-card" style="text-align: center; border-color: #EF4444;">', unsafe_allow_html=True)
+            st.markdown("<h3 style='margin-bottom: 10px;'>Creazione PDF in corso... ⏳</h3>", unsafe_allow_html=True)
+            st.markdown("<p style='margin-bottom: 20px; font-weight: bold; color: #EF4444;'>Guarda questo breve video per sbloccare il tuo download gratuito.</p>", unsafe_allow_html=True)
             
-            # 1. INSERISCI QUI IL LINK YOUTUBE DEL VIDEO PROMOZIONALE
-            st.video("https://www.youtube.com/watch?v=ZiP1l7jlIIA")
+            # --- SPAZIO PER IL VIDEO AD A PAGAMENTO ---
+            # Qui dentro incollerai il codice Javascript/Iframe che ti darà il network pubblicitario
+            codice_video_ad = """
+            <div style="display: flex; justify-content: center; align-items: center; background-color: #000000; border-radius: 8px; overflow: hidden;">
+                
+                <script type="text/javascript">
+                    // Questo è solo un segnaposto. Il vero codice farà partire un video.
+                    console.log("Il video pubblicitario sta partendo...");
+                </script>
+                
+                <h4 style="color: white; padding: 100px 20px;">[ SPAZIO PER IL VIDEO PUBBLICITARIO ]</h4>
+                
+            </div>
+            """
             
-            # 2. IL BOTTONE CON IL TUO LINK AFFILIATO PER GUADAGNARE
-            st.markdown("""
-                <div style="margin-top: 15px; margin-bottom: 20px;">
-                    <a href="INSERISCI_QUI_IL_TUO_LINK_AFFILIATO" target="_blank" style="display: inline-block; background-color: #6366F1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 1.1rem; transition: 0.3s; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);">
-                        👉 Clicca qui per scoprire l'offerta dello sponsor
-                    </a>
-                </div>
-            """, unsafe_allow_html=True)
+            # Mostriamo il video creando uno spazio alto circa 300 pixel
+            import streamlit.components.v1 as components
+            components.html(codice_video_ad, height=300)
             
-            progress_text = "Sblocco Download in corso..."
+            progress_text = "Sblocco del PDF tra 20 secondi... Non chiudere la pagina."
             my_bar = st.progress(0, text=progress_text)
             
-            # Timer di 10 secondi
+            # TIMER OBBLIGATORIO DI 20 SECONDI (Impossibile da saltare)
             for percent_complete in range(100):
-                time.sleep(0.10) 
+                time.sleep(0.20) # 0.20 * 100 step = 20 secondi esatti
                 my_bar.progress(percent_complete + 1, text=progress_text)
                 
             st.markdown('</div>', unsafe_allow_html=True)
             
-        # Finito il timer, cancelliamo la pubblicità e generiamo il PDF
+        # Finito il timer di 20 secondi, il video sparisce e generiamo il PDF
         ad_placeholder.empty()
         
-        with st.spinner("Creazione documento..."):
+        with st.spinner("Sbloccato! Preparazione del file finale..."):
             if st.session_state['data_type'] == "text":
                 st.session_state['pdf_ready'] = generate_pdf_from_text(st.session_state['input_data'])
             elif st.session_state['data_type'] == "image":
                 st.session_state['pdf_ready'] = generate_pdf_from_image(st.session_state['input_data'])
         st.rerun()
-
     # --- OUTPUT FINALE (IL DOWNLOAD) ---
     if st.session_state['pdf_ready']:
         st.markdown('<div class="clean-card" style="border-top: 4px solid #10B981; text-align: center;">', unsafe_allow_html=True)

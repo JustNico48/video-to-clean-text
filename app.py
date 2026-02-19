@@ -6,6 +6,7 @@ from io import BytesIO
 from fpdf import FPDF
 from docx import Document
 from PIL import Image
+import os
 
 # --- CONFIGURAZIONE PAGINA E CSS MINIMALISTA ---
 st.set_page_config(page_title="Universal PDF Converter", page_icon="📄", layout="wide")
@@ -59,8 +60,10 @@ def generate_pdf_from_text(text_content):
     # Sostituiamo caratteri non supportati dal font base per evitare crash
     safe_text = text_content.encode('latin-1', 'replace').decode('latin-1')
     
-    pdf.multi_cell(0, 7, safe_text)
-    return pdf.output(dest='S')
+    pdf.multi_cell(0, 7, txt=safe_text)
+    
+    # Restituisce i bytes puri, formato che Streamlit riconosce per il download
+    return bytes(pdf.output())
 
 def generate_pdf_from_image(image_bytes):
     """Centra un'immagine caricata all'interno di un PDF"""
@@ -77,9 +80,10 @@ def generate_pdf_from_image(image_bytes):
     # Inserisci immagine adattandola alla larghezza della pagina (A4: 210x297mm)
     pdf.image(temp_img_path, x=10, y=10, w=190)
     
-    import os
-    os.remove(temp_img_path) # Pulizia
-    return pdf.output(dest='S')
+    os.remove(temp_img_path) # Pulizia file temporaneo
+    
+    # Restituisce i bytes puri
+    return bytes(pdf.output())
 
 def get_webpage_text(url):
     """Estrae testo pulito da un link"""

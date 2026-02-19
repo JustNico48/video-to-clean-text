@@ -160,16 +160,20 @@ with main_col:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # --- IL SISTEMA DI MONETIZZAZIONE (REWARDED AD) ---
-    if st.session_state['input_data'] and not st.session_state['pdf_ready']:
-        ad_placeholder = st.empty()
-        
-        with ad_placeholder.container():
+   # --- IL SISTEMA DI MONETIZZAZIONE (REWARDED AD) ---
             st.markdown('<div class="clean-card" style="text-align: center; border-color: #6366F1;">', unsafe_allow_html=True)
             st.markdown("<h3 style='margin-bottom: 10px;'>Generazione in corso... ⏳</h3>", unsafe_allow_html=True)
             st.markdown("<p style='margin-bottom: 20px;'>Il nostro servizio è gratuito grazie agli sponsor. Il tuo PDF sarà pronto al termine del video.</p>", unsafe_allow_html=True)
             
-            # VIDEO PUBBLICITARIO (Sostituiscilo con il link del tuo sponsor/affiliato)
-            st.video("https://www.youtube.com/watch?v=ZiP1l7jlIIA")
+            # 1. INSERISCI QUI IL LINK YOUTUBE DEL VIDEO PROMOZIONALE
+            st.video("https://www.youtube.com/watch?v=tuo_video_sponsor_qui")
+            
+            # 2. IL BOTTONE CON IL TUO LINK AFFILIATO PER GUADAGNARE
+            st.markdown("""
+                <a href="INSERISCI_QUI_IL_TUO_LINK_AFFILIATO" target="_blank" style="display: inline-block; background-color: #6366F1; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 20px; transition: 0.3s;">
+                    👉 Clicca qui per scoprire l'offerta dello sponsor
+                </a>
+            """, unsafe_allow_html=True)
             
             progress_text = "Sblocco Download in corso..."
             my_bar = st.progress(0, text=progress_text)
@@ -180,7 +184,6 @@ with main_col:
                 my_bar.progress(percent_complete + 1, text=progress_text)
                 
             st.markdown('</div>', unsafe_allow_html=True)
-            
         # Finito il timer, cancelliamo la pubblicità e generiamo il PDF
         ad_placeholder.empty()
         

@@ -2,3 +2,5 @@ streamlit
 youtube-transcript-api
 textblob
 rake-nltk
+PyPDF2
+python-docx

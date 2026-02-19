@@ -5,23 +5,31 @@ from textblob import TextBlob
 from rake_nltk import Rake
 import nltk
 
-# Download necessario per le keyword
-nltk.download('punkt')
-nltk.download('stopwords')
+# --- FIX PER IL DOWNLOAD DELLE RISORSE NLTK ---
+@st.cache_resource # Questo evita di scaricare tutto ogni volta che rinfreschi la pagina
+def download_nltk_data():
+    try:
+        nltk.download('punkt')
+        nltk.download('stopwords')
+        nltk.download('punkt_tab') # Necessario per le nuove versioni
+    except Exception as e:
+        st.error(f"Errore nel download dei dati NLTK: {e}")
 
-st.set_page_config(page_title="CleanScript AI 4.0 | Ultra-Content Tool", page_icon="🚀", layout="wide")
+download_nltk_data()
 
-# Custom CSS per l'effetto "Premium"
+# Configurazione Pagina
+st.set_page_config(page_title="CleanScript AI 4.0 Ultra", page_icon="🚀", layout="wide")
+
+# CSS Migliorato
 st.markdown("""
     <style>
     .main { background: #f8f9fc; }
-    .stAlert { border-radius: 12px; }
     .metric-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); text-align: center; }
-    .stButton>button { border-radius: 50px; background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; font-weight: bold; }
+    .stButton>button { border-radius: 50px; background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; font-weight: bold; width: 100%; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- LOGICA TECNICA ---
+# --- LOGICA ---
 def extract_id(url):
     pattern = r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
     m = re.search(pattern, url)
@@ -29,20 +37,18 @@ def extract_id(url):
 
 def get_data(v_id):
     try:
+        # Tenta di prendere i sottotitoli in italiano, altrimenti inglese
         t_list = YouTubeTranscriptApi.get_transcript(v_id, languages=['it', 'en'])
         return " ".join([t['text'] for t in t_list])
-    except: return None
+    except Exception as e:
+        return None
 
 # --- UI ---
 st.title("🚀 CleanScript AI 4.0 Ultra")
-st.markdown("##### Il coltellino svizzero per Content Creator, Studenti e Marketers.")
+st.markdown("##### Analizzatore di Video YouTube - Da video a contenuto in 3 secondi.")
 
-with st.container():
-    col_url, col_btn = st.columns([3, 1])
-    with col_url:
-        url = st.text_input("", placeholder="Incolla URL YouTube qui per la magia...", label_visibility="collapsed")
-    with col_btn:
-        process = st.button("ANALIZZA ORA ⚡")
+url = st.text_input("Incolla URL YouTube qui:", placeholder="https://www.youtube.com/watch?v=...")
+process = st.button("ANALIZZA ORA ⚡")
 
 if process and url:
     v_id = extract_id(url)
@@ -50,18 +56,18 @@ if process and url:
         with st.spinner('Analisi profonda in corso...'):
             raw_text = get_data(v_id)
             if raw_text:
-                # Analisi Sentiment
+                # 1. Sentiment Analysis
                 blob = TextBlob(raw_text)
                 sentiment = "Positivo 😊" if blob.sentiment.polarity > 0.1 else "Negativo 😟" if blob.sentiment.polarity < -0.1 else "Neutrale 😐"
                 
-                # Analisi Keyword
+                # 2. Keyword Extraction
                 r = Rake()
                 r.extract_keywords_from_text(raw_text)
                 keywords = r.get_ranked_phrases()[:8]
                 
-                # Statistiche
+                # 3. Statistiche
                 words = len(raw_text.split())
-                time_saved = max(1, round(words / 150)) # stima minuti risparmiati
+                time_saved = max(1, round(words / 150))
                 
                 # Visualizzazione Dashboard
                 st.divider()
@@ -75,31 +81,25 @@ if process and url:
                 
                 c1, c2 = st.columns([2, 1])
                 with c1:
-                    st.subheader("📝 Testo Pulito")
-                    final_txt = st.text_area("", raw_text, height=400, label_visibility="collapsed")
-                    st.download_button("📥 Scarica Report .txt", final_txt)
+                    st.subheader("📝 Trascrizione Pulita")
+                    st.text_area("", raw_text, height=400, label_visibility="collapsed")
+                    st.download_button("📥 Scarica Report .txt", raw_text)
                 
                 with c2:
-                    st.subheader("🏷️ Social & SEO")
-                    st.write("**Top Keywords:**")
+                    st.subheader("🏷️ SEO & Social")
+                    st.write("**Keywords principali:**")
                     for kw in keywords:
                         st.code(kw)
                     
                     st.divider()
-                    st.write("**Hashtags Generati:**")
+                    st.write("**Hashtags suggeriti:**")
                     tags = " ".join([f"#{w.replace(' ', '')}" for w in keywords[:5]])
                     st.info(tags)
-                    
-                    st.divider()
-                    st.button("☕ Offrimi un caffè per sbloccare l'export PDF")
+                    st.markdown("[☕ Offrimi un caffè](https://www.paypal.me/tuo-link)")
             else:
-                st.error("Sottotitoli non trovati per questo video.")
+                st.error("Errore: Sottotitoli non disponibili per questo video (disattivati dall'autore o assenti).")
     else:
-        st.error("URL non valido.")
+        st.error("URL non valido. Assicurati che sia un link YouTube corretto.")
 
-# Footer Esteso (Migliora la percezione di qualità)
 st.markdown("---")
-f1, f2, f3 = st.columns(3)
-with f1: st.caption("🛡️ **Privacy Focus**: Nessun dato salvato.")
-with f2: st.caption("⚡ **Speed**: Elaborazione in < 3 secondi.")
-with f3: st.caption("📈 **SEO Ready**: Ottimizzato per blog e social.")
+st.caption("CleanScript AI 4.0 - Versione Stabile 2026")

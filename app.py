@@ -67,7 +67,6 @@ except Exception as e:
     ai_ready = False
 
 # --- FUNZIONI DI ESTRAZIONE ---
-
 def extract_yt_id(url):
     pattern = r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
     m = re.search(pattern, url)
@@ -87,20 +86,16 @@ def get_yt_data(v_id):
 def get_webpage_text(url):
     """Estrae il testo leggibile da un qualsiasi sito web/blog/articolo"""
     try:
-        # Mascheriamo la richiesta per sembrare un browser normale e non essere bloccati
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Rimuoviamo script, menu, footer e stili invisibili
         for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
             element.extract()
             
-        # Estraiamo solo il testo
         text = soup.get_text(separator=' ')
-        # Pulizia degli spazi vuoti multipli
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         clean_text = '\n'.join(chunk for chunk in chunks if chunk)
@@ -161,7 +156,7 @@ with main_col:
 
     if not st.session_state['raw_text']:
         f1, f2, f3 = st.columns(3)
-        with f1: st.markdown('<div class="feature-box"><div class="feature-icon">🌐</div><div class="feature-title">Estrai da Web</div><div class="feature-desc">Incolla link YouTube o articoli di blog.</div></div>', unsafe_allow_html=True)
+        with f1: st.markdown('<div class="feature-box"><div class="feature-icon">🌐</div><div class="feature-title">Estrai dal Web</div><div class="feature-desc">Incolla link di articoli, blog o video.</div></div>', unsafe_allow_html=True)
         with f2: st.markdown('<div class="feature-box"><div class="feature-icon">🎙️</div><div class="feature-title">Trascrivi Media</div><div class="feature-desc">Carica MP3, MP4, PDF o Word.</div></div>', unsafe_allow_html=True)
         with f3: st.markdown('<div class="feature-box"><div class="feature-icon">🧠</div><div class="feature-title">Motore IA</div><div class="feature-desc">Formatta, traduci e riassumi in secondi.</div></div>', unsafe_allow_html=True)
         st.write("")
@@ -169,11 +164,13 @@ with main_col:
     # --- AREA INPUT ---
     st.markdown('<div class="clean-card">', unsafe_allow_html=True)
     
-    tab_link, tab_file, tab_manual = st.tabs(["🌐 Link Web / YouTube", "📁 Carica File Media/Testo", "✍️ Incolla Testo"])
+    # Testi dei tab resi universali
+    tab_link, tab_file, tab_manual = st.tabs(["🌐 Inserisci Link", "📁 Carica File (Media/Testo)", "✍️ Incolla Testo"])
 
     with tab_link:
         col_url, col_btn = st.columns([3, 1])
-        url = col_url.text_input("", placeholder="Es: https://youtube.com/... o https://tuoblog.it/articolo", label_visibility="collapsed")
+        # Placeholder reso universale
+        url = col_url.text_input("", placeholder="Incolla qui qualsiasi link (Sito web, Articolo, Video)...", label_visibility="collapsed")
         if col_btn.button("Estrai Contenuto"):
             if url:
                 with st.spinner('Connessione al link in corso...'):
@@ -187,7 +184,7 @@ with main_col:
                             st.session_state['raw_text'] = testo
                             st.rerun()
                         else:
-                            st.error("⚠️ YouTube ha bloccato questo video. Copia la trascrizione manualmente e usa 'Incolla Testo'.")
+                            st.error("⚠️ Piattaforma video protetta. Copia il testo manualmente e usa 'Incolla Testo'.")
                     else:
                         # È un sito generico (articolo, blog, news)
                         testo, successo = get_webpage_text(url)
@@ -203,60 +200,4 @@ with main_col:
         if up_file and st.button("Elabora Documento / Media"):
             file_type = up_file.type
             with st.spinner("Analisi in corso (per audio/video potrebbe volerci un minuto)..."):
-                if file_type == "application/pdf": st.session_state['raw_text'] = "".join([p.extract_text() for p in PdfReader(up_file).pages])
-                elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document": st.session_state['raw_text'] = " ".join([p.text for p in Document(up_file).paragraphs])
-                elif file_type.startswith("text/"): st.session_state['raw_text'] = up_file.read().decode("utf-8")
-                elif file_type.startswith("audio/") or file_type.startswith("video/"):
-                    if ai_ready:
-                        temp_ext = "." + up_file.name.split('.')[-1]
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=temp_ext) as tmp_file:
-                            tmp_file.write(up_file.getvalue())
-                            tmp_path = tmp_file.name
-                        transcription_result = transcribe_audio_video_with_ai(tmp_path)
-                        st.session_state['raw_text'] = transcription_result
-                        os.remove(tmp_path)
-                    else: st.error("⚠️ La chiave API Gemini è necessaria per i file multimediali.")
-                st.rerun()
-
-    with tab_manual:
-        m_txt = st.text_area("", placeholder="Incolla qui la tua trascrizione o i tuoi appunti...", height=120, label_visibility="collapsed")
-        if st.button("Acquisisci Testo"): 
-            st.session_state['raw_text'] = m_txt
-            st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- AREA MOTORE IA ---
-    if st.session_state['raw_text'] and ai_ready:
-        st.markdown('<div class="clean-card">', unsafe_allow_html=True)
-        st.markdown("<h3 style='margin-bottom: 1.5rem; font-size: 1.25rem;'>Configurazione Output</h3>", unsafe_allow_html=True)
-        
-        with st.expander("👀 Mostra il testo grezzo estratto/trascritto"): st.write(st.session_state['raw_text'])
-
-        c1, c2, c3 = st.columns([2, 1, 1])
-        with c1: ai_mode = st.selectbox("Formato desiderato:", ["Pulizia Rigorosa", "Riassunto TL;DR", "Articolo Blog SEO", "Post LinkedIn/X", "Meeting (Action Items)"], label_visibility="collapsed")
-        with c2: ai_lang = st.selectbox("Lingua:", ["Italiano", "English", "Español", "Français"], label_visibility="collapsed")
-        with c3:
-            if st.button("Genera", use_container_width=True):
-                with st.spinner("Elaborazione IA in corso..."):
-                    clean_raw = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', st.session_state['raw_text'])
-                    st.session_state['ai_result'] = process_with_ai(clean_raw, ai_mode, ai_lang)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- OUTPUT FINALE ---
-    if st.session_state['ai_result']:
-        st.markdown('<div class="clean-card" style="border-top: 4px solid #111827;">', unsafe_allow_html=True)
-        st.markdown("<h3 style='margin-bottom: 1rem; font-size: 1.25rem;'>Risultato</h3>", unsafe_allow_html=True)
-        
-        st.text_area("", st.session_state['ai_result'], height=350, label_visibility="collapsed")
-        
-        col_btn1, col_btn2, col_space = st.columns([1, 1, 3])
-        with col_btn1: st.download_button("Scarica .txt", st.session_state['ai_result'], file_name="cleanscript_ai.txt")
-        with col_btn2:
-            if st.button("Svuota tutto"):
-                st.session_state['raw_text'] = ""
-                st.session_state['ai_result'] = ""
-                st.rerun()
-                
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown("<div style='text-align: center; margin-top: 2rem;'><a href='https://paypal.me/tuolink' style='color: #6B7280; text-decoration: none; font-size: 0.9rem;'>Se questo tool ti è utile, offrimi un caffè ☕</a></div>", unsafe_allow_html=True)
+                if file_type == "application/pdf": st.

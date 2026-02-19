@@ -1,25 +1,21 @@
 import streamlit as st
-import re
-import google.generativeai as genai
-from PyPDF2 import PdfReader
-from docx import Document
-from youtube_transcript_api import YouTubeTranscriptApi
-import tempfile
-import os
 import time
 import requests
 from bs4 import BeautifulSoup
+from io import BytesIO
+from fpdf import FPDF
+from docx import Document
+from PIL import Image
 
-# --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="CleanScript AI | Universal", page_icon="🌐", layout="wide")
+# --- CONFIGURAZIONE PAGINA E CSS MINIMALISTA ---
+st.set_page_config(page_title="Universal PDF Converter", page_icon="📄", layout="wide")
 
-# --- CSS MINIMALISTA ---
 st.markdown("""
     <style>
     [data-testid="stHeader"] { background-color: transparent !important; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; max-width: 1000px !important; }
+    .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; max-width: 900px !important; }
 
     .stApp { background-color: #FAFAFA !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important; }
     p, span, label, div { color: #4B5563 !important; }
@@ -31,12 +27,7 @@ st.markdown("""
         border: 1px solid #E5E7EB; margin-bottom: 2rem; transition: box-shadow 0.2s ease;
     }
 
-    .feature-box { text-align: center; padding: 2rem 1.5rem; background: #FFFFFF; border-radius: 12px; border: 1px solid #F3F4F6; }
-    .feature-icon { font-size: 2rem; margin-bottom: 1rem; color: #111827; }
-    .feature-title { font-weight: 600; color: #111827; margin-bottom: 0.5rem; font-size: 1.1rem; }
-    .feature-desc { font-size: 0.9rem; color: #6B7280; line-height: 1.5; }
-
-    .stTextInput>div>div>input, .stTextArea textarea, .stSelectbox>div>div>div {
+    .stTextInput>div>div>input, .stTextArea textarea {
         background-color: #F9FAFB !important; border: 1px solid #D1D5DB !important;
         border-radius: 8px !important; padding: 0.75rem 1rem !important; color: #111827 !important; transition: all 0.2s;
     }
@@ -57,220 +48,165 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- SETUP INTELLIGENZA ARTIFICIALE ---
-# --- SETUP INTELLIGENZA ARTIFICIALE ---
-try:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=API_KEY)
+# --- MOTORE DI CREAZIONE PDF ---
+def generate_pdf_from_text(text_content):
+    """Crea un PDF elegante a partire da un testo"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("helvetica", size=12)
     
-    # 1. Chiediamo a Google quali modelli sono disponibili per questa chiave
-    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    # Sostituiamo caratteri non supportati dal font base per evitare crash
+    safe_text = text_content.encode('latin-1', 'replace').decode('latin-1')
     
-    # 2. Scegliamo dinamicamente il migliore in ordine di potenza/velocità
-    if 'models/gemini-1.5-flash' in available_models:
-        best_model = 'gemini-1.5-flash'
-    elif 'models/gemini-1.5-pro' in available_models:
-        best_model = 'gemini-1.5-pro'
-    elif 'models/gemini-pro' in available_models: # Versione ultra-stabile precedente
-        best_model = 'gemini-pro'
-    else:
-        # Piano di emergenza assoluto: prende il primo modello testuale che trova
-        best_model = available_models[0].replace('models/', '')
-        
-    model = genai.GenerativeModel(best_model)
-    ai_ready = True
-except Exception as e:
-    ai_ready = False
-    st.error(f"Errore di configurazione API: {e}")
+    pdf.multi_cell(0, 7, safe_text)
+    return pdf.output(dest='S')
 
-# --- FUNZIONI DI ESTRAZIONE ---
-def extract_yt_id(url):
-    pattern = r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
-    m = re.search(pattern, url)
-    return m.group(1) if m else None
-
-def get_yt_data(v_id):
-    try:
-        t_list = YouTubeTranscriptApi.get_transcript(v_id, languages=['it', 'en'])
-        return " ".join([t['text'] for t in t_list]), True
-    except:
-        try:
-            t_list = YouTubeTranscriptApi.get_transcript(v_id)
-            return " ".join([t['text'] for t in t_list]), True
-        except Exception as e:
-            return str(e), False
+def generate_pdf_from_image(image_bytes):
+    """Centra un'immagine caricata all'interno di un PDF"""
+    img = Image.open(BytesIO(image_bytes))
+    # Converti in RGB se è PNG con trasparenza
+    if img.mode in ('RGBA', 'P'): img = img.convert('RGB')
+    
+    # Salva temporaneamente l'immagine per passarla a fpdf
+    temp_img_path = "temp_image.jpg"
+    img.save(temp_img_path)
+    
+    pdf = FPDF()
+    pdf.add_page()
+    # Inserisci immagine adattandola alla larghezza della pagina (A4: 210x297mm)
+    pdf.image(temp_img_path, x=10, y=10, w=190)
+    
+    import os
+    os.remove(temp_img_path) # Pulizia
+    return pdf.output(dest='S')
 
 def get_webpage_text(url):
-    """Estrae il testo leggibile da un qualsiasi sito web/blog/articolo"""
+    """Estrae testo pulito da un link"""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
-        
         soup = BeautifulSoup(response.content, 'html.parser')
-        
         for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
             element.extract()
-            
-        text = soup.get_text(separator=' ')
+        text = soup.get_text(separator='\n')
         lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        clean_text = '\n'.join(chunk for chunk in chunks if chunk)
-        
+        clean_text = '\n'.join(line for line in lines if line)
         return clean_text, True
     except Exception as e:
-        return f"Errore durante la lettura del sito web: {str(e)}", False
-
-def transcribe_audio_video_with_ai(file_path):
-    try:
-        uploaded_file = genai.upload_file(file_path)
-        while uploaded_file.state.name == 'PROCESSING':
-            time.sleep(2)
-            uploaded_file = genai.get_file(uploaded_file.name)
-        if uploaded_file.state.name == 'FAILED': return "Errore IA nell'elaborazione multimediale."
-        
-        prompt = "Trascrivi esattamente questo file audio/video parola per parola."
-        response = model.generate_content([uploaded_file, prompt])
-        genai.delete_file(uploaded_file.name)
-        return response.text
-    except Exception as e: return str(e)
-
-def process_with_ai(text, mode, language):
-    if not text.strip(): return "Errore: Testo vuoto."
-    prompts = {
-        "Pulizia Rigorosa": "Sei un editor. Rimuovi errori e formatta con cura in paragrafi leggibili.",
-        "Riassunto TL;DR": "Sei un analista. Crea un riassunto: 1 paragrafo introduttivo e una lista dei concetti chiave.",
-        "Articolo Blog SEO": "Sei un Copywriter. Trasforma questo contenuto in un articolo (Titolo H1, intro, paragrafi con H2).",
-        "Post LinkedIn/X": "Crea un post professionale estraendo il concetto migliore. Usa un hook e hashtag pertinenti.",
-        "Meeting (Action Items)": "Analizza e crea: 1. Argomenti. 2. Decisioni. 3. Action Items."
-    }
-    prompt_base = prompts.get(mode, prompts["Pulizia Rigorosa"])
-    full_prompt = f"{prompt_base}\n\nREGOLE: Scrivi ESCLUSIVAMENTE in lingua {language}.\n\nTESTO:\n{text}"
-    try:
-        response = model.generate_content(full_prompt)
-        return response.text
-    except Exception as e: return f"Errore IA: {str(e)}"
+        return f"Errore durante l'estrazione: {e}", False
 
 # --- STATO SESSIONE ---
-if 'raw_text' not in st.session_state: st.session_state['raw_text'] = ""
-if 'ai_result' not in st.session_state: st.session_state['ai_result'] = ""
+if 'input_data' not in st.session_state: st.session_state['input_data'] = None
+if 'data_type' not in st.session_state: st.session_state['data_type'] = None
+if 'pdf_ready' not in st.session_state: st.session_state['pdf_ready'] = None
 
-# --- STRUTTURA A COLONNE ---
+# --- UI PRINCIPALE ---
 spacer_left, main_col, spacer_right = st.columns([1, 8, 1])
 
 with main_col:
-    # --- HERO SECTION ---
     st.markdown("""
-        <div style="text-align: center; padding: 2.5rem 0 3.5rem 0;">
-            <h1 style='font-size: 3rem; margin-bottom: 0.5rem; color: #111827;'>CleanScript AI</h1>
+        <div style="text-align: center; padding: 2.5rem 0 2rem 0;">
+            <h1 style='font-size: 3rem; margin-bottom: 0.5rem; color: #111827;'>Any-to-PDF Converter</h1>
             <p style='font-size: 1.1rem; color: #6B7280; max-width: 600px; margin: 0 auto;'>
-                Estrai contenuti da Link, Video, Audio o Documenti e trasformali con l'IA.
+                Trasforma Link, Immagini, Word o Testi in documenti PDF professionali.
             </p>
         </div>
     """, unsafe_allow_html=True)
-    
-    if not ai_ready: st.error("⚠️ Chiave API Gemini non trovata nei Secrets di Streamlit.")
 
-    if not st.session_state['raw_text']:
-        f1, f2, f3 = st.columns(3)
-        with f1: st.markdown('<div class="feature-box"><div class="feature-icon">🌐</div><div class="feature-title">Estrai dal Web</div><div class="feature-desc">Incolla link di articoli, blog o video.</div></div>', unsafe_allow_html=True)
-        with f2: st.markdown('<div class="feature-box"><div class="feature-icon">🎙️</div><div class="feature-title">Trascrivi Media</div><div class="feature-desc">Carica MP3, MP4, PDF o Word.</div></div>', unsafe_allow_html=True)
-        with f3: st.markdown('<div class="feature-box"><div class="feature-icon">🧠</div><div class="feature-title">Motore IA</div><div class="feature-desc">Formatta, traduci e riassumi in secondi.</div></div>', unsafe_allow_html=True)
-        st.write("")
-
-    # --- AREA INPUT ---
     st.markdown('<div class="clean-card">', unsafe_allow_html=True)
     
-    # Testi dei tab resi universali
-    tab_link, tab_file, tab_manual = st.tabs(["🌐 Inserisci Link", "📁 Carica File (Media/Testo)", "✍️ Incolla Testo"])
+    tab_link, tab_file, tab_text = st.tabs(["🌐 Link Web", "📁 Immagini / Word", "✍️ Incolla Testo"])
 
     with tab_link:
-        col_url, col_btn = st.columns([3, 1])
-        # Placeholder reso universale
-        url = col_url.text_input("", placeholder="Incolla qui qualsiasi link (Sito web, Articolo, Video)...", label_visibility="collapsed")
-        if col_btn.button("Estrai Contenuto"):
+        url = st.text_input("", placeholder="Incolla l'URL di un articolo o sito web...", label_visibility="collapsed")
+        if st.button("Estrai come PDF", key="btn_url"):
             if url:
-                with st.spinner('Connessione al link in corso...'):
-                    # Controllo intelligente: È un video YouTube o un normale sito web?
-                    yt_id = extract_yt_id(url)
-                    
-                    if yt_id:
-                        # È YouTube
-                        testo, successo = get_yt_data(yt_id)
-                        if successo:
-                            st.session_state['raw_text'] = testo
-                            st.rerun()
-                        else:
-                            st.error("⚠️ Piattaforma video protetta. Copia il testo manualmente e usa 'Incolla Testo'.")
-                    else:
-                        # È un sito generico (articolo, blog, news)
-                        testo, successo = get_webpage_text(url)
-                        if successo and len(testo) > 50:
-                            st.session_state['raw_text'] = testo
-                            st.rerun()
-                        else:
-                            st.error("⚠️ Impossibile estrarre testo da questa pagina. Potrebbe essere protetta o vuota.")
-            else: st.error("Inserisci un link valido.")
+                with st.spinner("Estrazione contenuto web..."):
+                    text, success = get_webpage_text(url)
+                    if success:
+                        st.session_state['input_data'] = text
+                        st.session_state['data_type'] = "text"
+                        st.session_state['pdf_ready'] = None
+                    else: st.error(text)
 
     with tab_file:
-        up_file = st.file_uploader("Trascina qui PDF, DOCX, TXT, MP3, WAV, M4A o MP4", type=['pdf', 'docx', 'txt', 'mp3', 'wav', 'm4a', 'mp4'], label_visibility="collapsed")
-        if up_file and st.button("Elabora Documento / Media"):
-            file_type = up_file.type
-            with st.spinner("Analisi in corso (per audio/video potrebbe volerci un minuto)..."):
-                if file_type == "application/pdf": st.session_state['raw_text'] = "".join([p.extract_text() for p in PdfReader(up_file).pages])
-                elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document": st.session_state['raw_text'] = " ".join([p.text for p in Document(up_file).paragraphs])
-                elif file_type.startswith("text/"): st.session_state['raw_text'] = up_file.read().decode("utf-8")
-                elif file_type.startswith("audio/") or file_type.startswith("video/"):
-                    if ai_ready:
-                        temp_ext = "." + up_file.name.split('.')[-1]
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=temp_ext) as tmp_file:
-                            tmp_file.write(up_file.getvalue())
-                            tmp_path = tmp_file.name
-                        transcription_result = transcribe_audio_video_with_ai(tmp_path)
-                        st.session_state['raw_text'] = transcription_result
-                        os.remove(tmp_path)
-                    else: st.error("⚠️ La chiave API Gemini è necessaria per i file multimediali.")
-                st.rerun()
+        up_file = st.file_uploader("Carica JPG, PNG, DOCX o TXT", type=['jpg', 'jpeg', 'png', 'docx', 'txt'], label_visibility="collapsed")
+        if up_file and st.button("Converti File", key="btn_file"):
+            if up_file.type in ['image/jpeg', 'image/png']:
+                st.session_state['input_data'] = up_file.getvalue()
+                st.session_state['data_type'] = "image"
+            elif up_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                st.session_state['input_data'] = "\n".join([p.text for p in Document(up_file).paragraphs])
+                st.session_state['data_type'] = "text"
+            else:
+                st.session_state['input_data'] = up_file.read().decode('utf-8')
+                st.session_state['data_type'] = "text"
+            st.session_state['pdf_ready'] = None
 
-    with tab_manual:
-        m_txt = st.text_area("", placeholder="Incolla qui la tua trascrizione, codice o appunti liberi...", height=120, label_visibility="collapsed")
-        if st.button("Acquisisci Testo"): 
-            st.session_state['raw_text'] = m_txt
-            st.rerun()
-
+    with tab_text:
+        m_txt = st.text_area("", placeholder="Incolla qui i tuoi appunti, codice o testo libero...", height=150, label_visibility="collapsed")
+        if st.button("Crea PDF", key="btn_txt"):
+            if m_txt:
+                st.session_state['input_data'] = m_txt
+                st.session_state['data_type'] = "text"
+                st.session_state['pdf_ready'] = None
+                
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- AREA MOTORE IA ---
-    if st.session_state['raw_text'] and ai_ready:
-        st.markdown('<div class="clean-card">', unsafe_allow_html=True)
-        st.markdown("<h3 style='margin-bottom: 1.5rem; font-size: 1.25rem;'>Configurazione Output</h3>", unsafe_allow_html=True)
+    # --- IL SISTEMA DI MONETIZZAZIONE (REWARDED AD) ---
+    if st.session_state['input_data'] and not st.session_state['pdf_ready']:
+        ad_placeholder = st.empty()
         
-        with st.expander("👀 Mostra il testo grezzo estratto/trascritto"): st.write(st.session_state['raw_text'])
+        with ad_placeholder.container():
+            st.markdown('<div class="clean-card" style="text-align: center; border-color: #6366F1;">', unsafe_allow_html=True)
+            st.markdown("<h3 style='margin-bottom: 10px;'>Generazione in corso... ⏳</h3>", unsafe_allow_html=True)
+            st.markdown("<p style='margin-bottom: 20px;'>Il nostro servizio è gratuito grazie agli sponsor. Il tuo PDF sarà pronto al termine del video.</p>", unsafe_allow_html=True)
+            
+            # VIDEO PUBBLICITARIO (Sostituiscilo con il link del tuo sponsor/affiliato)
+            st.video("https://www.youtube.com/watch?v=ZiP1l7jlIIA")
+            
+            progress_text = "Sblocco Download in corso..."
+            my_bar = st.progress(0, text=progress_text)
+            
+            # Timer di 10 secondi
+            for percent_complete in range(100):
+                time.sleep(0.10) 
+                my_bar.progress(percent_complete + 1, text=progress_text)
+                
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        # Finito il timer, cancelliamo la pubblicità e generiamo il PDF
+        ad_placeholder.empty()
+        
+        with st.spinner("Creazione documento..."):
+            if st.session_state['data_type'] == "text":
+                st.session_state['pdf_ready'] = generate_pdf_from_text(st.session_state['input_data'])
+            elif st.session_state['data_type'] == "image":
+                st.session_state['pdf_ready'] = generate_pdf_from_image(st.session_state['input_data'])
+        st.rerun()
 
-        c1, c2, c3 = st.columns([2, 1, 1])
-        with c1: ai_mode = st.selectbox("Formato desiderato:", ["Pulizia Rigorosa", "Riassunto TL;DR", "Articolo Blog SEO", "Post LinkedIn/X", "Meeting (Action Items)"], label_visibility="collapsed")
-        with c2: ai_lang = st.selectbox("Lingua:", ["Italiano", "English", "Español", "Français"], label_visibility="collapsed")
-        with c3:
-            if st.button("Genera", use_container_width=True):
-                with st.spinner("Elaborazione IA in corso..."):
-                    clean_raw = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', st.session_state['raw_text'])
-                    st.session_state['ai_result'] = process_with_ai(clean_raw, ai_mode, ai_lang)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- OUTPUT FINALE ---
-    if st.session_state['ai_result']:
-        st.markdown('<div class="clean-card" style="border-top: 4px solid #111827;">', unsafe_allow_html=True)
-        st.markdown("<h3 style='margin-bottom: 1rem; font-size: 1.25rem;'>Risultato</h3>", unsafe_allow_html=True)
+    # --- OUTPUT FINALE (IL DOWNLOAD) ---
+    if st.session_state['pdf_ready']:
+        st.markdown('<div class="clean-card" style="border-top: 4px solid #10B981; text-align: center;">', unsafe_allow_html=True)
+        st.markdown("<h2 style='margin-bottom: 1rem;'>✅ Il tuo PDF è pronto!</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: 2rem;'>Grazie per l'attesa. Puoi scaricare il tuo file impaginato e pulito.</p>", unsafe_allow_html=True)
         
-        st.text_area("", st.session_state['ai_result'], height=350, label_visibility="collapsed")
-        
-        col_btn1, col_btn2, col_space = st.columns([1, 1, 3])
-        with col_btn1: st.download_button("Scarica .txt", st.session_state['ai_result'], file_name="cleanscript_ai.txt")
-        with col_btn2:
-            if st.button("Svuota tutto"):
-                st.session_state['raw_text'] = ""
-                st.session_state['ai_result'] = ""
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            st.download_button(
+                label="📥 SCARICA IL DOCUMENTO PDF",
+                data=st.session_state['pdf_ready'],
+                file_name="Convertito_CleanScript.pdf",
+                mime="application/pdf"
+            )
+            
+            st.write("")
+            if st.button("🔄 Converti un altro file", use_container_width=True):
+                st.session_state['input_data'] = None
+                st.session_state['data_type'] = None
+                st.session_state['pdf_ready'] = None
                 st.rerun()
                 
         st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown("<div style='text-align: center; margin-top: 2rem;'><a href='https://paypal.me/tuolink' style='color: #6B7280; text-decoration: none; font-size: 0.9rem;'>Se questo tool ti è utile, offrimi un caffè ☕</a></div>", unsafe_allow_html=True)

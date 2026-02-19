@@ -64,20 +64,17 @@ def extract_id(url):
 
 def get_yt_data(v_id):
     try:
-        # Chiediamo a YouTube la lista di tutti i sottotitoli disponibili
-        transcript_list = YouTubeTranscriptApi.list_transcripts(v_id)
-        
-        # Cerchiamo italiano o inglese, se non ci sono prendiamo il primo che capita
-        try:
-            transcript = transcript_list.find_transcript(['it', 'en'])
-        except:
-            transcript = next(iter(transcript_list))
-            
-        t_list = transcript.fetch()
+        # Tentativo 1: Prova a forzare i sottotitoli in italiano o inglese
+        t_list = YouTubeTranscriptApi.get_transcript(v_id, languages=['it', 'en'])
         return " ".join([t['text'] for t in t_list]), None
-    except Exception as e:
-        # Se fallisce, restituiamo l'errore tecnico esatto per capire il problema
-        return None, str(e)
+    except Exception as e1:
+        try:
+            # Tentativo 2: Se fallisce, scarica QUALSIASI trascrizione di default (senza specificare la lingua)
+            t_list = YouTubeTranscriptApi.get_transcript(v_id)
+            return " ".join([t['text'] for t in t_list]), None
+        except Exception as e2:
+            # Se fallisce anche questo, cattura l'errore finale
+            return None, str(e2)
 
 # --- SIDEBAR: STRUMENTI DI TESTO AVANZATI ---
 with st.sidebar:
@@ -125,14 +122,14 @@ with tab_yt:
     if c2.button("ESTRAI", use_container_width=True):
         v_id = extract_id(url)
         if v_id:
-            with st.spinner('Tentativo di connessione a YouTube in corso...'):
+            with st.spinner('Tentativo di estrazione da YouTube in corso...'):
                 res, error_msg = get_yt_data(v_id)
                 if res: 
                     st.session_state['raw_text'] = res
                     st.session_state['processed_text'] = res
                     st.success("Estratto con successo!")
                 else: 
-                    st.error("YouTube ha bloccato l'estrazione per questo video.")
+                    st.error("YouTube ha bloccato l'estrazione per questo video o i sottotitoli non esistono.")
                     st.warning(f"Dettaglio Tecnico: {error_msg}")
                     st.info("💡 Usa il tab '✍️ Incolla Testo': vai su YouTube, clicca su 'Mostra Trascrizione', copia tutto e incollalo manualmente!")
         else: st.error("URL non valido.")

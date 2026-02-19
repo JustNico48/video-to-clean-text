@@ -4,6 +4,9 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from textblob import TextBlob
 from rake_nltk import Rake
 import nltk
+from PyPDF2 import PdfReader
+from docx import Document
+import io
 
 # --- FIX RISORSE NLTK ---
 @st.cache_resource
@@ -17,18 +20,22 @@ def download_nltk_data():
 
 download_nltk_data()
 
-st.set_page_config(page_title="CleanScript AI 4.0 Ultra", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="CleanScript AI Ultra", page_icon="🛸", layout="wide")
 
-# CSS Styling
+# Styling Premium
 st.markdown("""
     <style>
-    .main { background: #f8f9fc; }
-    .metric-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); text-align: center; border: 1px solid #eee; }
-    .stButton>button { border-radius: 50px; background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; font-weight: bold; }
+    .main { background: #f4f7f9; }
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #ffffff; border-radius: 10px 10px 0px 0px; padding: 10px 20px; border: 1px solid #eee;
+    }
+    .metric-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); text-align: center; }
+    .stButton>button { border-radius: 10px; background: #2563eb; color: white; border: none; font-weight: bold; width: 100%; height: 3em; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNZIONI ---
+# --- FUNZIONI DI ESTRAZIONE ---
 def extract_id(url):
     pattern = r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
     m = re.search(pattern, url)
@@ -40,83 +47,94 @@ def get_yt_data(v_id):
         return " ".join([t['text'] for t in t_list])
     except: return None
 
+def read_pdf(file):
+    reader = PdfReader(file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
+    return text
+
+def read_docx(file):
+    doc = Document(file)
+    return " ".join([para.text for para in doc.paragraphs])
+
 # --- INTERFACCIA ---
-st.title("🚀 CleanScript AI 4.0 Ultra")
-st.markdown("##### Trasforma video YouTube o testi grezzi in contenuti professionali.")
+st.title("🛸 CleanScript AI Ultra 2026")
+st.markdown("##### Carica Video, PDF, Word o Testo e ottieni analisi e contenuti puliti istantaneamente.")
 
-# Tab per scegliere la fonte
-tab_yt, tab_manual = st.tabs(["🎥 Da Link YouTube", "✍️ Incolla Testo Manuale"])
+input_text = ""
 
-input_text = "" # Variabile che conterrà il testo da analizzare
+# Creazione Tab
+tab_yt, tab_file, tab_manual = st.tabs(["🎥 YouTube Link", "📁 Carica File (PDF/DOC)", "✍️ Incolla Testo"])
 
 with tab_yt:
-    url = st.text_input("Inserisci URL YouTube:", placeholder="https://www.youtube.com/watch?v=...")
-    if st.button("ESTRAI DA YOUTUBE ⚡"):
+    url = st.text_input("URL Video:", placeholder="https://www.youtube.com/watch?v=...")
+    if st.button("ANALIZZA VIDEO 🎬"):
         v_id = extract_id(url)
         if v_id:
-            with st.spinner('Estrazione in corso...'):
+            with st.spinner('Estraendo sottotitoli...'):
                 input_text = get_yt_data(v_id)
-                if not input_text:
-                    st.error("Sottotitoli non disponibili per questo video.")
-        else:
-            st.error("URL non valido.")
+        else: st.error("Link non valido.")
+
+with tab_file:
+    uploaded_file = st.file_uploader("Trascina qui il tuo file (PDF, DOCX o TXT)", type=['pdf', 'docx', 'txt'])
+    if uploaded_file and st.button("ELABORA FILE 📑"):
+        with st.spinner('Leggendo il file...'):
+            if uploaded_file.type == "application/pdf":
+                input_text = read_pdf(uploaded_file)
+            elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                input_text = read_docx(uploaded_file)
+            else:
+                input_text = uploaded_file.read().decode("utf-8")
 
 with tab_manual:
-    manual_text = st.text_area("Incolla qui il tuo testo sporco (es. trascrizioni Zoom, appunti, etc.):", height=250)
-    if st.button("PULISCI TESTO MANUALE ✨"):
-        if manual_text:
-            input_text = manual_text
-        else:
-            st.warning("Incolla del testo prima di procedere.")
+    manual_text = st.text_area("Incolla il tuo testo qui:", height=200)
+    if st.button("PULISCI TESTO ✨"):
+        input_text = manual_text
 
-# --- AREA ANALISI (Si attiva solo se c'è del testo) ---
+# --- ENGINE DI ANALISI ---
 if input_text:
-    # Pulizia base (rimozione timestamp se presenti)
+    # Pulizia
     input_text = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', input_text)
     input_text = " ".join(input_text.split())
 
-    # Analisi Sentiment
+    # Sentiment & Keywords
     blob = TextBlob(input_text)
     sentiment = "Positivo 😊" if blob.sentiment.polarity > 0.1 else "Negativo 😟" if blob.sentiment.polarity < -0.1 else "Neutrale 😐"
     
-    # Analisi Keyword
     r = Rake()
     r.extract_keywords_from_text(input_text)
     keywords = r.get_ranked_phrases()[:8]
     
-    # Statistiche
     words = len(input_text.split())
-    time_saved = max(1, round(words / 150))
     
     st.divider()
     
-    # Dashboard Metriche
-    m1, m2, m3, m4 = st.columns(4)
+    # Dashboard Risultati
+    m1, m2, m3 = st.columns(3)
     with m1: st.markdown(f'<div class="metric-card">📖 Parole<br><h3>{words}</h3></div>', unsafe_allow_html=True)
     with m2: st.markdown(f'<div class="metric-card">🎭 Mood<br><h3>{sentiment}</h3></div>', unsafe_allow_html=True)
-    with m3: st.markdown(f'<div class="metric-card">⏱️ Risparmiati<br><h3>{time_saved} min</h3></div>', unsafe_allow_html=True)
-    with m4: st.markdown(f'<div class="metric-card">🔑 Keyword<br><h3>{len(keywords)}</h3></div>', unsafe_allow_html=True)
+    with m3: st.markdown(f'<div class="metric-card">🔑 Keywords<br><h3>{len(keywords)}</h3></div>', unsafe_allow_html=True)
     
     st.divider()
     
     c1, c2 = st.columns([2, 1])
     with c1:
-        st.subheader("📝 Risultato Pulito")
-        st.text_area("Contenuto pronto all'uso:", input_text, height=400)
-        st.download_button("📥 Scarica Report .txt", input_text, file_name="cleanscript_output.txt")
+        st.subheader("📝 Contenuto Elaborato")
+        final_area = st.text_area("", input_text, height=400, label_visibility="collapsed")
+        st.download_button("📥 Scarica Risultato .txt", final_area, file_name="cleanscript_ultra.txt")
     
     with c2:
         st.subheader("🏷️ Social & SEO")
-        st.write("**Keywords:**")
-        for kw in keywords:
-            st.code(kw)
+        st.write("**Top Keywords:**")
+        for kw in keywords: st.code(kw)
         
         st.divider()
         st.write("**Hashtags:**")
         tags = " ".join([f"#{w.replace(' ', '')}" for w in keywords[:5]])
         st.info(tags)
         
-        st.markdown("[☕ Offrimi un caffè](https://www.paypal.me/tuo-link)")
+        st.markdown("[☕ Supporta il Progetto](https://www.paypal.me/tuo-link)")
 
 st.markdown("---")
-st.caption("© 2026 CleanScript AI - Nessun dato viene salvato.")
+st.caption("CleanScript AI Ultra - Gestione Multiformato Avanzata")

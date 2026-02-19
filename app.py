@@ -160,19 +160,24 @@ with main_col:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # --- IL SISTEMA DI MONETIZZAZIONE (REWARDED AD) ---
-   # --- IL SISTEMA DI MONETIZZAZIONE (REWARDED AD) ---
+    if st.session_state['input_data'] and not st.session_state['pdf_ready']:
+        ad_placeholder = st.empty()
+        
+        with ad_placeholder.container():
             st.markdown('<div class="clean-card" style="text-align: center; border-color: #6366F1;">', unsafe_allow_html=True)
             st.markdown("<h3 style='margin-bottom: 10px;'>Generazione in corso... ⏳</h3>", unsafe_allow_html=True)
             st.markdown("<p style='margin-bottom: 20px;'>Il nostro servizio è gratuito grazie agli sponsor. Il tuo PDF sarà pronto al termine del video.</p>", unsafe_allow_html=True)
             
             # 1. INSERISCI QUI IL LINK YOUTUBE DEL VIDEO PROMOZIONALE
-            st.video("https://www.youtube.com/watch?v=tuo_video_sponsor_qui")
+            st.video("https://www.youtube.com/watch?v=ZiP1l7jlIIA")
             
             # 2. IL BOTTONE CON IL TUO LINK AFFILIATO PER GUADAGNARE
             st.markdown("""
-                <a href="INSERISCI_QUI_IL_TUO_LINK_AFFILIATO" target="_blank" style="display: inline-block; background-color: #6366F1; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 20px; transition: 0.3s;">
-                    👉 Clicca qui per scoprire l'offerta dello sponsor
-                </a>
+                <div style="margin-top: 15px; margin-bottom: 20px;">
+                    <a href="INSERISCI_QUI_IL_TUO_LINK_AFFILIATO" target="_blank" style="display: inline-block; background-color: #6366F1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 1.1rem; transition: 0.3s; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);">
+                        👉 Clicca qui per scoprire l'offerta dello sponsor
+                    </a>
+                </div>
             """, unsafe_allow_html=True)
             
             progress_text = "Sblocco Download in corso..."
@@ -184,6 +189,7 @@ with main_col:
                 my_bar.progress(percent_complete + 1, text=progress_text)
                 
             st.markdown('</div>', unsafe_allow_html=True)
+            
         # Finito il timer, cancelliamo la pubblicità e generiamo il PDF
         ad_placeholder.empty()
         

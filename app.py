@@ -200,4 +200,60 @@ with main_col:
         if up_file and st.button("Elabora Documento / Media"):
             file_type = up_file.type
             with st.spinner("Analisi in corso (per audio/video potrebbe volerci un minuto)..."):
-                if file_type == "application/pdf": st.
+                if file_type == "application/pdf": st.session_state['raw_text'] = "".join([p.extract_text() for p in PdfReader(up_file).pages])
+                elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document": st.session_state['raw_text'] = " ".join([p.text for p in Document(up_file).paragraphs])
+                elif file_type.startswith("text/"): st.session_state['raw_text'] = up_file.read().decode("utf-8")
+                elif file_type.startswith("audio/") or file_type.startswith("video/"):
+                    if ai_ready:
+                        temp_ext = "." + up_file.name.split('.')[-1]
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=temp_ext) as tmp_file:
+                            tmp_file.write(up_file.getvalue())
+                            tmp_path = tmp_file.name
+                        transcription_result = transcribe_audio_video_with_ai(tmp_path)
+                        st.session_state['raw_text'] = transcription_result
+                        os.remove(tmp_path)
+                    else: st.error("⚠️ La chiave API Gemini è necessaria per i file multimediali.")
+                st.rerun()
+
+    with tab_manual:
+        m_txt = st.text_area("", placeholder="Incolla qui la tua trascrizione, codice o appunti liberi...", height=120, label_visibility="collapsed")
+        if st.button("Acquisisci Testo"): 
+            st.session_state['raw_text'] = m_txt
+            st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- AREA MOTORE IA ---
+    if st.session_state['raw_text'] and ai_ready:
+        st.markdown('<div class="clean-card">', unsafe_allow_html=True)
+        st.markdown("<h3 style='margin-bottom: 1.5rem; font-size: 1.25rem;'>Configurazione Output</h3>", unsafe_allow_html=True)
+        
+        with st.expander("👀 Mostra il testo grezzo estratto/trascritto"): st.write(st.session_state['raw_text'])
+
+        c1, c2, c3 = st.columns([2, 1, 1])
+        with c1: ai_mode = st.selectbox("Formato desiderato:", ["Pulizia Rigorosa", "Riassunto TL;DR", "Articolo Blog SEO", "Post LinkedIn/X", "Meeting (Action Items)"], label_visibility="collapsed")
+        with c2: ai_lang = st.selectbox("Lingua:", ["Italiano", "English", "Español", "Français"], label_visibility="collapsed")
+        with c3:
+            if st.button("Genera", use_container_width=True):
+                with st.spinner("Elaborazione IA in corso..."):
+                    clean_raw = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', st.session_state['raw_text'])
+                    st.session_state['ai_result'] = process_with_ai(clean_raw, ai_mode, ai_lang)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- OUTPUT FINALE ---
+    if st.session_state['ai_result']:
+        st.markdown('<div class="clean-card" style="border-top: 4px solid #111827;">', unsafe_allow_html=True)
+        st.markdown("<h3 style='margin-bottom: 1rem; font-size: 1.25rem;'>Risultato</h3>", unsafe_allow_html=True)
+        
+        st.text_area("", st.session_state['ai_result'], height=350, label_visibility="collapsed")
+        
+        col_btn1, col_btn2, col_space = st.columns([1, 1, 3])
+        with col_btn1: st.download_button("Scarica .txt", st.session_state['ai_result'], file_name="cleanscript_ai.txt")
+        with col_btn2:
+            if st.button("Svuota tutto"):
+                st.session_state['raw_text'] = ""
+                st.session_state['ai_result'] = ""
+                st.rerun()
+                
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("<div style='text-align: center; margin-top: 2rem;'><a href='https://paypal.me/tuolink' style='color: #6B7280; text-decoration: none; font-size: 0.9rem;'>Se questo tool ti è utile, offrimi un caffè ☕</a></div>", unsafe_allow_html=True)

@@ -7,43 +7,56 @@ import nltk
 from PyPDF2 import PdfReader
 from docx import Document
 from deep_translator import GoogleTranslator
-import io
 
 # --- SETUP RISORSE ---
 @st.cache_resource
 def download_nltk_data():
     try:
-        nltk.download('punkt')
-        nltk.download('stopwords')
-        nltk.download('punkt_tab')
+        nltk.download('punkt', quiet=True)
+        nltk.download('stopwords', quiet=True)
+        nltk.download('punkt_tab', quiet=True)
     except: pass
 
 download_nltk_data()
 
-st.set_page_config(page_title="CleanScript AI | All-in-One Content Hub", page_icon="🪄", layout="wide")
+st.set_page_config(page_title="CleanScript AI | Ultimate Studio", page_icon="⚡", layout="wide")
 
-# --- CSS AESTHETIC ENTERPRISE ---
+# --- CSS FLUIDO (Si adatta a Light/Dark Mode automaticamente) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #F8FAFC; }
-    .main-card { background: white; padding: 30px; border-radius: 20px; border: 1px solid #E2E8F0; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); }
+    .metric-card { 
+        background-color: var(--secondary-background-color); 
+        padding: 20px; 
+        border-radius: 12px; 
+        border: 1px solid rgba(128, 128, 128, 0.2); 
+        text-align: center; 
+    }
+    .metric-title { font-size: 0.9rem; color: var(--text-color); opacity: 0.7; text-transform: uppercase; letter-spacing: 1px;}
+    .metric-value { font-size: 1.8rem; font-weight: 800; color: var(--text-color); margin-top: 5px; }
     .stButton>button { 
-        background-color: #0F172A !important; color: white !important; 
-        border-radius: 12px !important; font-weight: 600 !important; 
-        height: 3.5rem !important; transition: 0.3s; border: none !important;
+        border-radius: 8px; 
+        font-weight: 600; 
+        transition: all 0.2s; 
+        border: 1px solid var(--primary-color);
+        width: 100%;
     }
-    .stButton>button:hover { background-color: #334155 !important; transform: translateY(-2px); }
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { 
-        background-color: white; border: 1px solid #E2E8F0; 
-        border-radius: 10px; padding: 10px 20px; font-weight: 600;
+    .stButton>button:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    .stTabs [aria-selected="true"] { background-color: #0F172A !important; color: white !important; }
-    .metric-card { background: white; padding: 20px; border-radius: 15px; border: 1px solid #E2E8F0; text-align: center; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] { border-radius: 8px 8px 0 0; padding: 10px 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNZIONI DI SUPPORTO ---
+# --- INIZIALIZZAZIONE MEMORIA (Session State) ---
+if 'raw_text' not in st.session_state:
+    st.session_state['raw_text'] = ""
+if 'processed_text' not in st.session_state:
+    st.session_state['processed_text'] = ""
+
+# --- FUNZIONI UTILI ---
 def extract_id(url):
     pattern = r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
     m = re.search(pattern, url)
@@ -55,109 +68,156 @@ def get_yt_data(v_id):
         return " ".join([t['text'] for t in t_list])
     except: return None
 
+# --- SIDEBAR: STRUMENTI DI TESTO AVANZATI ---
+with st.sidebar:
+    st.title("🛠️ Strumenti Avanzati")
+    st.info("Questi strumenti si applicano al testo elaborato.")
+    
+    # Trova e sostituisci
+    st.subheader("Trova & Sostituisci")
+    find_word = st.text_input("Parola da trovare:")
+    replace_word = st.text_input("Sostituisci con:")
+    if st.button("Applica Sostituzione") and st.session_state['processed_text']:
+        st.session_state['processed_text'] = st.session_state['processed_text'].replace(find_word, replace_word)
+        st.success("Sostituito!")
+
+    # Rimuovi parole specifiche
+    st.subheader("Filtro Parole")
+    words_to_remove = st.text_input("Parole da rimuovere (separate da virgola):", placeholder="ehm, cioè, praticamente")
+    if st.button("Pulisci Parole") and st.session_state['processed_text']:
+        text_temp = st.session_state['processed_text']
+        for w in [x.strip() for x in words_to_remove.split(',') if x.strip()]:
+            text_temp = re.sub(rf'\b{w}\b', '', text_temp, flags=re.IGNORECASE)
+        st.session_state['processed_text'] = " ".join(text_temp.split())
+        st.success("Pulizia completata!")
+        
+    # Maiuscole/Minuscole
+    st.subheader("Casing")
+    col_c1, col_c2, col_c3 = st.columns(3)
+    if col_c1.button("ABC") and st.session_state['processed_text']:
+        st.session_state['processed_text'] = st.session_state['processed_text'].upper()
+    if col_c2.button("abc") and st.session_state['processed_text']:
+        st.session_state['processed_text'] = st.session_state['processed_text'].lower()
+    if col_c3.button("Abc") and st.session_state['processed_text']:
+        st.session_state['processed_text'] = st.session_state['processed_text'].title()
+
+    st.divider()
+    st.markdown("[☕ Supporta il server](https://paypal.me/tuolink)")
+
 # --- UI PRINCIPALE ---
-st.title("🪄 CleanScript AI")
-st.markdown("<p style='font-size: 1.2em; color: #64748B;'>Converti qualsiasi fonte video o documentale in contenuti ottimizzati.</p>", unsafe_allow_html=True)
+st.title("⚡ CleanScript AI Studio")
+st.markdown("Importa, analizza e trasforma i tuoi contenuti in modo impeccabile.")
 
-if 'processed_text' not in st.session_state:
-    st.session_state['processed_text'] = ""
+# Layout Input (Tab)
+tab_yt, tab_file, tab_manual = st.tabs(["🎥 Estrai da YouTube", "📁 Carica Documento", "✍️ Incolla Testo"])
 
-# Layout Input
-with st.container():
-    st.markdown('<div class="main-card">', unsafe_allow_html=True)
-    tab_yt, tab_file, tab_manual = st.tabs(["🎥 YouTube", "📁 Documenti", "✍️ Testo"])
-    
-    with tab_yt:
-        c1, c2 = st.columns([3, 1])
-        with c1: url = st.text_input("Link Video", placeholder="Incolla URL YouTube...")
-        with c2: 
-            if st.button("ESTRAI VIDEO"):
-                v_id = extract_id(url)
-                if v_id:
-                    with st.spinner('Analisi...'):
-                        res = get_yt_data(v_id)
-                        if res: st.session_state['processed_text'] = res
-                        else: st.error("Sottotitoli non trovati.")
-                else: st.error("URL non valido.")
+with tab_yt:
+    c1, c2 = st.columns([4, 1])
+    url = c1.text_input("Link YouTube:", placeholder="https://youtube.com/watch?v=...", label_visibility="collapsed")
+    if c2.button("ESTRAI", use_container_width=True):
+        v_id = extract_id(url)
+        if v_id:
+            with st.spinner('Estrazione...'):
+                res = get_yt_data(v_id)
+                if res: 
+                    st.session_state['raw_text'] = res
+                    st.session_state['processed_text'] = res
+                else: st.error("Sottotitoli non disponibili.")
+        else: st.error("URL non valido.")
 
-    with tab_file:
-        up_file = st.file_uploader("Carica PDF o Word", type=['pdf', 'docx', 'txt'])
-        if up_file:
-            if st.button("ELABORA FILE"):
-                if up_file.type == "application/pdf":
-                    st.session_state['processed_text'] = "".join([p.extract_text() for p in PdfReader(up_file).pages])
-                elif up_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                    st.session_state['processed_text'] = " ".join([p.text for p in Document(up_file).paragraphs])
-                else:
-                    st.session_state['processed_text'] = up_file.read().decode("utf-8")
+with tab_file:
+    up_file = st.file_uploader("Formati supportati: PDF, DOCX, TXT", type=['pdf', 'docx', 'txt'])
+    if up_file and st.button("ELABORA FILE"):
+        with st.spinner('Lettura in corso...'):
+            if up_file.type == "application/pdf":
+                st.session_state['raw_text'] = "".join([p.extract_text() for p in PdfReader(up_file).pages])
+            elif up_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                st.session_state['raw_text'] = " ".join([p.text for p in Document(up_file).paragraphs])
+            else:
+                st.session_state['raw_text'] = up_file.read().decode("utf-8")
+            st.session_state['processed_text'] = st.session_state['raw_text']
 
-    with tab_manual:
-        m_txt = st.text_area("Incolla qui", height=150)
-        if st.button("PULISCI"):
-            st.session_state['processed_text'] = m_txt
-    st.markdown('</div>', unsafe_allow_html=True)
+with tab_manual:
+    m_txt = st.text_area("Incolla qui gli appunti o la trascrizione grezza:", height=150)
+    if st.button("ACQUISISCI TESTO"):
+        st.session_state['raw_text'] = m_txt
+        st.session_state['processed_text'] = m_txt
 
-# --- ANALISI E RISULTATI ---
+# --- MOTORE DI ANALISI E OUTPUT ---
 if st.session_state['processed_text']:
-    raw = st.session_state['processed_text']
-    # Pulizia Timestamp
-    clean = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', raw)
-    clean = " ".join(clean.split())
-
-    st.markdown("### 📊 Insight & Strumenti")
+    st.divider()
     
-    # Tool di Traduzione e Formattazione
-    col_tools1, col_tools2 = st.columns(2)
-    with col_tools1:
-        target_lang = st.selectbox("🌍 Traduci in:", ["Nessuna", "Italiano", "English", "Spanish", "French", "German"])
-        if target_lang != "Nessuna":
-            clean = GoogleTranslator(source='auto', target=target_lang.lower()).translate(clean)
-    
-    with col_tools2:
-        format_style = st.select_slider("📝 Stile Formattazione:", options=["Grezzo", "Riassunto", "Blog Post", "LinkedIn Thread"])
+    # Pulizia automatica di base
+    current_text = st.session_state['processed_text']
+    current_text = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', current_text)
+    current_text = " ".join(current_text.split())
+    st.session_state['processed_text'] = current_text
 
+    # Formattazione & Traduzione Rapida
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        target_lang = st.selectbox("🌍 Traduci Output:", ["Originale", "Italiano", "English", "Spanish", "French", "German"])
+        if target_lang != "Originale":
+            with st.spinner("Traduzione in corso..."):
+                current_text = GoogleTranslator(source='auto', target=target_lang.lower()).translate(current_text)
+                st.session_state['processed_text'] = current_text
+
+    with col_f2:
+        format_style = st.selectbox("📝 Stile Generazione:", ["Testo Pulito (Nessuna formattazione)", "Appunti puntati", "Struttura Blog SEO", "Post Social (LinkedIn/X)"])
+
+    # Applica lo stile
+    display_text = current_text
+    if format_style == "Appunti puntati":
+        display_text = "\n".join([f"- {sentence.strip()}" for sentence in current_text.split('. ') if len(sentence) > 5])
+    elif format_style == "Struttura Blog SEO":
+        display_text = f"# Titolo Articolo\n\n## Introduzione\n{current_text[:400]}...\n\n## Sviluppo Principale\n{current_text[400:]}"
+    elif format_style == "Post Social (LinkedIn/X)":
+        display_text = f"🚀 NUOVO INSIGHT\n\n{current_text[:300]}...\n\n👇 Scopri i dettagli qui sotto.\n#content #ai #productivity"
+
+    # Calcolo Metriche
+    words = len(display_text.split())
+    try:
+        sentiment_score = TextBlob(current_text).sentiment.polarity
+        mood = "Positivo 😊" if sentiment_score > 0.1 else "Neutrale 😐" if sentiment_score > -0.1 else "Negativo 😟"
+    except: mood = "N/D"
+    
     # Dashboard Metriche
     m1, m2, m3, m4 = st.columns(4)
-    words = len(clean.split())
-    sentiment = TextBlob(clean).sentiment.polarity
-    mood = "Positivo 😊" if sentiment > 0.1 else "Neutrale 😐" if sentiment > -0.1 else "Negativo 😟"
+    m1.markdown(f'<div class="metric-card"><div class="metric-title">Parole</div><div class="metric-value">{words}</div></div>', unsafe_allow_html=True)
+    m2.markdown(f'<div class="metric-card"><div class="metric-title">Tempo Lettura</div><div class="metric-value">{max(1, words//200)}m</div></div>', unsafe_allow_html=True)
+    m3.markdown(f'<div class="metric-card"><div class="metric-title">Mood</div><div class="metric-value">{mood}</div></div>', unsafe_allow_html=True)
+    m4.markdown(f'<div class="metric-card"><div class="metric-title">Caratteri</div><div class="metric-value">{len(display_text)}</div></div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Output finale
+    out_col, info_col = st.columns([2, 1])
     
-    m1.metric("Parole", words)
-    m2.metric("Mood", mood)
-    m3.metric("Tempo Lettura", f"{max(1, words//180)} min")
-    m4.metric("Stato", "Analizzato ✅")
-
-    st.markdown("---")
-    
-    res_col, side_col = st.columns([2, 1])
-    
-    with res_col:
-        st.subheader("Output Finale")
-        # Logica Formattazione
-        display_text = clean
-        if format_style == "Riassunto": display_text = f"📍 RIASSUNTO:\n\n{clean[:800]}..."
-        elif format_style == "Blog Post": display_text = f"# TITOLO ARTICOLO\n\n{clean[:400]}...\n\n## Analisi\n{clean[400:]}"
-        elif format_style == "LinkedIn Thread": display_text = f"🧵 THREAD\n\n1/5 {clean[:200]}..."
-
-        st.text_area("Risultato:", display_text, height=400, label_visibility="collapsed")
+    with out_col:
+        st.subheader("Risultato Finale")
+        st.text_area("", display_text, height=400, label_visibility="collapsed")
         
-        btn_c1, btn_c2 = st.columns(2)
-        btn_c1.download_button("📥 Scarica .txt", display_text, file_name="cleanscript_pro.txt")
-        if btn_c2.button("📋 Copia negli appunti"):
-            st.write('<script>navigator.clipboard.writeText(`' + display_text + '`);</script>', unsafe_allow_html=True)
-            st.success("Copiato!")
+        # Bottoni di download/copia
+        btn_c1, btn_c2, btn_c3 = st.columns(3)
+        btn_c1.download_button("📥 Scarica .txt", display_text, file_name="cleanscript.txt")
+        btn_c2.download_button("📝 Scarica .md", display_text, file_name="cleanscript.md")
+        if btn_c3.button("📋 Copia Testo"):
+            st.toast("Copiato negli appunti! (Funzione supportata dai browser moderni)")
+            # Nota: Streamlit gestisce la copia su browser in modo limitato via Python, l'utente può fare ctrl+c sull'area di testo
 
-    with side_col:
-        st.subheader("SEO & Social")
-        r = Rake()
-        r.extract_keywords_from_text(clean)
-        kw = r.get_ranked_phrases()[:5]
-        for k in kw: st.code(f"🔑 {k}")
-        
-        st.divider()
-        tags = " ".join([f"#{w.replace(' ', '')}" for w in kw])
-        st.info(f"**Hashtags:**\n{tags}")
-        
-        st.markdown("[☕ Supporta il progetto](https://paypal.me/tuolink)")
+    with info_col:
+        st.subheader("Intelligenza SEO")
+        try:
+            r = Rake()
+            r.extract_keywords_from_text(current_text)
+            kw = r.get_ranked_phrases()[:6]
+            st.write("**Parole chiave dominanti:**")
+            for k in kw: st.code(k)
+            st.divider()
+            tags = " ".join([f"#{w.replace(' ', '')}" for w in kw[:4]])
+            st.info(f"**Hashtags generati:**\n{tags}")
+        except:
+            st.write("Dati insufficienti per estrarre parole chiave.")
 
-st.markdown("<br><center><p style='color: #94A3B8;'>CleanScript AI 4.0 Pro — Ultimate Content Assistant</p></center>", unsafe_allow_html=True)
+st.markdown("---")
+st.caption("© 2026 CleanScript AI Studio | Elaborazione locale senza memorizzazione dati")

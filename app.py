@@ -1,68 +1,64 @@
 import streamlit as st
 
 # Configurazione della pagina
-st.set_page_config(page_title="CleanScript AI", page_icon="✨", layout="centered")
+st.set_page_config(page_title="CleanScript AI", page_icon="🪄", layout="wide")
 
-# Stile CSS personalizzato per un look professionale
+# UI Styling
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #007bff; color: white; }
-    .stTextArea>div>div>textarea { border-radius: 10px; }
+    .main { background-color: #ffffff; }
+    .stButton>button { 
+        background: linear-gradient(45deg, #007bff, #6610f2); 
+        color: white; 
+        font-weight: bold;
+        border: none;
+    }
+    .stTextArea textarea { border: 1px solid #e0e0e0; }
     </style>
     """, unsafe_allow_html=True)
 
-# Intestazione
-st.title("✨ CleanScript AI")
-st.subheader("Trasforma trascrizioni grezze in contenuti pronti all'uso.")
-st.write("Dimentica i timestamp e gli errori. Ottieni un testo pulito in un click.")
+# Layout a due colonne
+col1, col2 = st.columns([2, 1])
 
-# Barra laterale per Monetizzazione/Info
-with st.sidebar:
-    st.header("Opzioni Premium")
-    st.info("Stai usando la versione gratuita. Limite: 5000 parole.")
-    if st.button("🚀 Sblocca Versione Illimitata"):
-        st.write("---")
-        st.write("🔗 [Clicca qui per pagare con Stripe](https://tuo-link-di-pagamento.com)")
+with col1:
+    st.title("🪄 CleanScript AI")
+    st.write("Il tool definitivo per pulire trascrizioni da YouTube, Zoom e Podcast.")
+    
+    raw_input = st.text_area("Incolla qui il testo sporco:", height=400, placeholder="00:12 Benvenuti nel video... [00:45] Grazie per essere qui...")
 
-# Area di Input
-text_input = st.text_area("Incolla qui la tua trascrizione sporca (o file .srt):", height=300, placeholder="00:01 Ciao a tutti 00:05 oggi parliamo di...")
+with col2:
+    st.header("Configurazione")
+    language = st.selectbox("Lingua Originale", ["Italiano", "English", "Español", "Français"])
+    output_style = st.radio(
+        "Formato Desiderato:",
+        ["Articolo Blog (SEO)", "Thread LinkedIn/X", "Punti Elenco (Summary)", "Testo Pulito (No Timestamp)"]
+    )
+    
+    st.divider()
+    st.write("💎 **Versione Pro**")
+    st.caption("Sblocca l'export in PDF e la rimozione automatica delle 'parole di riempimento' (ehm, ah, cioè).")
+    st.button("Ottieni l'accesso Pro")
 
-# Opzioni di Formattazione
-format_type = st.radio(
-    "Come vuoi trasformare il testo?",
-    ["Articolo Strutturato", "Post LinkedIn Virale", "Riassunto Esecutivo"]
-)
-
-# Funzione di "Cleaning" (Logica del Motore)
-def clean_transcript(raw_text, mode):
+# Logica di Trasformazione
+def process_text(text, style):
     import re
-    # 1. Rimuove timestamp (formati comuni 00:00 o [00:00])
-    cleaned = re.sub(r'\d{1,2}:\d{2}(:\d{2})?', '', raw_text)
-    cleaned = re.sub(r'\[.*?\]', '', cleaned)
+    # Rimozione Timestamp standard
+    text = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', text)
+    # Rimozione nomi speaker (es. Speaker 1:)
+    text = re.sub(r'Speaker \d+:', '', text)
+    text = " ".join(text.split())
     
-    # 2. Pulizia spazi bianchi
-    cleaned = " ".join(cleaned.split())
-    
-    # 3. Logica di formattazione base (Simulazione AI)
-    if mode == "Articolo Strutturato":
-        return f"## Titolo Generato\n\n{cleaned[:300]}...\n\n### Analisi Approfondita\n\n{cleaned[300:]}"
-    elif mode == "Post LinkedIn Virale":
-        return f"🚀 INSIGHT DEL GIORNO\n\n💡 {cleaned[:200]}\n\n👇 Cosa ne pensate?\n#CleanScript #Efficiency"
-    else:
-        return f"**Riassunto:** {cleaned[:500]}..."
+    if style == "Articolo Blog (SEO)":
+        return f"# Titolo: Analisi del Contenuto\n\n## Introduzione\n{text[:400]}...\n\n## Punti Chiave\n- Approfondimento 1\n- Approfondimento 2"
+    elif style == "Thread LinkedIn/X":
+        return f"🧵 THREAD\n\n1/ Ho analizzato l'ultimo intervento su questo tema.\n\n2/ Ecco i punti principali: {text[:200]}..."
+    return text
 
-# Tasto di Azione
-if st.button("Pulisci e Formatta"):
-    if text_input:
-        with st.spinner('L\'intelligenza artificiale sta elaborando...'):
-            result = clean_transcript(text_input, format_type)
-            st.success("Fatto! Ecco il tuo contenuto pulito:")
-            st.text_area("Risultato:", value=result, height=400)
-            st.download_button("Scarica file .txt", result, file_name="cleanscript_output.txt")
+if st.button("✨ TRASFORMA ORA"):
+    if raw_input:
+        processed = process_text(raw_input, output_style)
+        st.success("Testo elaborato con successo!")
+        st.text_area("Risultato:", processed, height=300)
+        st.download_button("Scarica Risultato", processed, file_name="cleanscript_export.txt")
     else:
-        st.warning("Per favore, inserisci del testo prima di procedere.")
-
-# Footer
-st.markdown("---")
-st.caption("© 2026 CleanScript AI - Nessun dato viene salvato sui nostri server.")
+        st.error("Inserisci del testo per continuare.")

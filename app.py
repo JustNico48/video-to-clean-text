@@ -56,7 +56,7 @@ if 'raw_text' not in st.session_state:
 if 'processed_text' not in st.session_state:
     st.session_state['processed_text'] = ""
 
-# --- FUNZIONI UTILI ---
+# --- FUNZIONI UTILI E DI ESTRAZIONE ---
 def extract_id(url):
     pattern = r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
     m = re.search(pattern, url)
@@ -64,27 +64,26 @@ def extract_id(url):
 
 def get_yt_data(v_id):
     try:
-        # Tentativo 1: Cerca sottotitoli standard in italiano o inglese
-        t_list = YouTubeTranscriptApi.get_transcript(v_id, languages=['it', 'en'])
-        return " ".join([t['text'] for t in t_list])
-    except:
+        # Chiediamo a YouTube la lista di tutti i sottotitoli disponibili
+        transcript_list = YouTubeTranscriptApi.list_transcripts(v_id)
+        
+        # Cerchiamo italiano o inglese, se non ci sono prendiamo il primo che capita
         try:
-            # Tentativo 2: Se fallisce, cerca QUALSIASI sottotitolo disponibile (anche automatico)
-            transcript_list = YouTubeTranscriptApi.list_transcripts(v_id)
-            # Prende la prima lingua disponibile nella lista forzatamente
-            first_transcript = next(iter(transcript_list))
-            t_list = first_transcript.fetch()
-            return " ".join([t['text'] for t in t_list])
-        except Exception as e:
-            # Se YouTube blocca totalmente l'accesso (es. blocco 18+ severo)
-            return None
+            transcript = transcript_list.find_transcript(['it', 'en'])
+        except:
+            transcript = next(iter(transcript_list))
+            
+        t_list = transcript.fetch()
+        return " ".join([t['text'] for t in t_list]), None
+    except Exception as e:
+        # Se fallisce, restituiamo l'errore tecnico esatto per capire il problema
+        return None, str(e)
 
 # --- SIDEBAR: STRUMENTI DI TESTO AVANZATI ---
 with st.sidebar:
     st.title("🛠️ Strumenti Avanzati")
-    st.info("Questi strumenti si applicano al testo elaborato.")
+    st.info("Questi filtri si applicano al testo elaborato.")
     
-    # Trova e sostituisci
     st.subheader("Trova & Sostituisci")
     find_word = st.text_input("Parola da trovare:")
     replace_word = st.text_input("Sostituisci con:")
@@ -92,9 +91,8 @@ with st.sidebar:
         st.session_state['processed_text'] = st.session_state['processed_text'].replace(find_word, replace_word)
         st.success("Sostituito!")
 
-    # Rimuovi parole specifiche
     st.subheader("Filtro Parole")
-    words_to_remove = st.text_input("Parole da rimuovere (separate da virgola):", placeholder="ehm, cioè, praticamente")
+    words_to_remove = st.text_input("Parole da rimuovere (separate da virgola):", placeholder="ehm, cioè, allora")
     if st.button("Pulisci Parole") and st.session_state['processed_text']:
         text_temp = st.session_state['processed_text']
         for w in [x.strip() for x in words_to_remove.split(',') if x.strip()]:
@@ -102,7 +100,6 @@ with st.sidebar:
         st.session_state['processed_text'] = " ".join(text_temp.split())
         st.success("Pulizia completata!")
         
-    # Maiuscole/Minuscole
     st.subheader("Casing")
     col_c1, col_c2, col_c3 = st.columns(3)
     if col_c1.button("ABC") and st.session_state['processed_text']:
@@ -128,12 +125,16 @@ with tab_yt:
     if c2.button("ESTRAI", use_container_width=True):
         v_id = extract_id(url)
         if v_id:
-            with st.spinner('Estrazione...'):
-                res = get_yt_data(v_id)
+            with st.spinner('Tentativo di connessione a YouTube in corso...'):
+                res, error_msg = get_yt_data(v_id)
                 if res: 
                     st.session_state['raw_text'] = res
                     st.session_state['processed_text'] = res
-                else: st.error("Sottotitoli non disponibili.")
+                    st.success("Estratto con successo!")
+                else: 
+                    st.error("YouTube ha bloccato l'estrazione per questo video.")
+                    st.warning(f"Dettaglio Tecnico: {error_msg}")
+                    st.info("💡 Usa il tab '✍️ Incolla Testo': vai su YouTube, clicca su 'Mostra Trascrizione', copia tutto e incollalo manualmente!")
         else: st.error("URL non valido.")
 
 with tab_file:
@@ -149,7 +150,7 @@ with tab_file:
             st.session_state['processed_text'] = st.session_state['raw_text']
 
 with tab_manual:
-    m_txt = st.text_area("Incolla qui gli appunti o la trascrizione grezza:", height=150)
+    m_txt = st.text_area("Incolla qui gli appunti o la trascrizione grezza di YouTube:", height=150)
     if st.button("ACQUISISCI TESTO"):
         st.session_state['raw_text'] = m_txt
         st.session_state['processed_text'] = m_txt
@@ -158,7 +159,7 @@ with tab_manual:
 if st.session_state['processed_text']:
     st.divider()
     
-    # Pulizia automatica di base
+    # Pulizia automatica di base (Rimuove [00:00:00] o simili)
     current_text = st.session_state['processed_text']
     current_text = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', current_text)
     current_text = " ".join(current_text.split())
@@ -169,9 +170,15 @@ if st.session_state['processed_text']:
     with col_f1:
         target_lang = st.selectbox("🌍 Traduci Output:", ["Originale", "Italiano", "English", "Spanish", "French", "German"])
         if target_lang != "Originale":
-            with st.spinner("Traduzione in corso..."):
-                current_text = GoogleTranslator(source='auto', target=target_lang.lower()).translate(current_text)
-                st.session_state['processed_text'] = current_text
+            with st.spinner("Traduzione in corso... (potrebbe richiedere qualche secondo)"):
+                try:
+                    # Dividiamo in blocchi per evitare limiti del traduttore gratuito
+                    chunks = [current_text[i:i+4500] for i in range(0, len(current_text), 4500)]
+                    translated_chunks = [GoogleTranslator(source='auto', target=target_lang.lower()).translate(chunk) for chunk in chunks]
+                    current_text = " ".join(translated_chunks)
+                    st.session_state['processed_text'] = current_text
+                except Exception as e:
+                    st.error(f"Errore di traduzione: {e}")
 
     with col_f2:
         format_style = st.selectbox("📝 Stile Generazione:", ["Testo Pulito (Nessuna formattazione)", "Appunti puntati", "Struttura Blog SEO", "Post Social (LinkedIn/X)"])
@@ -212,9 +219,8 @@ if st.session_state['processed_text']:
         btn_c1, btn_c2, btn_c3 = st.columns(3)
         btn_c1.download_button("📥 Scarica .txt", display_text, file_name="cleanscript.txt")
         btn_c2.download_button("📝 Scarica .md", display_text, file_name="cleanscript.md")
-        if btn_c3.button("📋 Copia Testo"):
-            st.toast("Copiato negli appunti! (Funzione supportata dai browser moderni)")
-            # Nota: Streamlit gestisce la copia su browser in modo limitato via Python, l'utente può fare ctrl+c sull'area di testo
+        if btn_c3.button("📋 Info Copia"):
+            st.info("Per copiare, clicca dentro l'area di testo sopra, premi Ctrl+A (o Cmd+A) e poi Ctrl+C.")
 
     with info_col:
         st.subheader("Intelligenza SEO")

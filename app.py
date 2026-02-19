@@ -4,102 +4,55 @@ import google.generativeai as genai
 from PyPDF2 import PdfReader
 from docx import Document
 from youtube_transcript_api import YouTubeTranscriptApi
+import tempfile
+import os
+import time
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="CleanScript AI | Minimal", page_icon="🖋️", layout="wide")
+st.set_page_config(page_title="CleanScript AI | Multimodal", page_icon="🖋️", layout="wide")
 
 # --- CSS MINIMALISTA (Stile Notion / Vercel) ---
 st.markdown("""
     <style>
-    /* Nasconde header default e menu */
     [data-testid="stHeader"] { background-color: transparent !important; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; max-width: 1000px !important; }
 
-    /* Sfondo ultra pulito e font leggibile */
-    .stApp {
-        background-color: #FAFAFA !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-    }
-
-    /* Palette Testi Monocromatica */
+    .stApp { background-color: #FAFAFA !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important; }
     p, span, label, div { color: #4B5563 !important; }
     h1, h2, h3 { color: #111827 !important; font-weight: 700 !important; letter-spacing: -0.02em; }
 
-    /* Card pulite senza effetto vetro eccessivo */
     .clean-card {
-        background: #FFFFFF !important;
-        padding: 2.5rem;
-        border-radius: 12px;
+        background: #FFFFFF !important; padding: 2.5rem; border-radius: 12px;
         box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
-        border: 1px solid #E5E7EB;
-        margin-bottom: 2rem;
-        transition: box-shadow 0.2s ease;
+        border: 1px solid #E5E7EB; margin-bottom: 2rem; transition: box-shadow 0.2s ease;
     }
-    .clean-card:hover {
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-    }
+    .clean-card:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); }
 
-    /* Mini-Card Features */
-    .feature-box {
-        text-align: center;
-        padding: 2rem 1.5rem;
-        background: #FFFFFF;
-        border-radius: 12px;
-        border: 1px solid #F3F4F6;
-    }
+    .feature-box { text-align: center; padding: 2rem 1.5rem; background: #FFFFFF; border-radius: 12px; border: 1px solid #F3F4F6; }
     .feature-icon { font-size: 2rem; margin-bottom: 1rem; color: #111827; }
     .feature-title { font-weight: 600; color: #111827; margin-bottom: 0.5rem; font-size: 1.1rem; }
     .feature-desc { font-size: 0.9rem; color: #6B7280; line-height: 1.5; }
 
-    /* Input Fields eleganti e neutri */
     .stTextInput>div>div>input, .stTextArea textarea, .stSelectbox>div>div>div {
-        background-color: #F9FAFB !important;
-        border: 1px solid #D1D5DB !important;
-        border-radius: 8px !important;
-        padding: 0.75rem 1rem !important;
-        color: #111827 !important;
-        transition: all 0.2s;
+        background-color: #F9FAFB !important; border: 1px solid #D1D5DB !important;
+        border-radius: 8px !important; padding: 0.75rem 1rem !important; color: #111827 !important; transition: all 0.2s;
     }
     .stTextArea textarea:focus, .stTextInput>div>div>input:focus {
-        background-color: #FFFFFF !important;
-        border-color: #111827 !important;
-        box-shadow: 0 0 0 1px #111827 !important;
+        background-color: #FFFFFF !important; border-color: #111827 !important; box-shadow: 0 0 0 1px #111827 !important;
     }
 
-    /* Bottoni stile Premium (Sfondo scuro, testo chiaro) */
     .stButton>button {
-        background-color: #111827 !important;
-        color: #FFFFFF !important;
-        border: 1px solid #111827 !important;
-        border-radius: 8px !important;
-        padding: 0.75rem 1.5rem !important;
-        font-weight: 600 !important;
-        transition: all 0.2s ease !important;
-        width: 100%;
-        font-size: 0.95rem !important;
+        background-color: #111827 !important; color: #FFFFFF !important; border: 1px solid #111827 !important;
+        border-radius: 8px !important; padding: 0.75rem 1.5rem !important; font-weight: 600 !important;
+        transition: all 0.2s ease !important; width: 100%; font-size: 0.95rem !important;
     }
-    .stButton>button:hover {
-        background-color: #FFFFFF !important;
-        color: #111827 !important;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1) !important;
-    }
+    .stButton>button:hover { background-color: #FFFFFF !important; color: #111827 !important; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1) !important; }
 
-    /* Tabs minimali */
     .stTabs [data-baseweb="tab-list"] { gap: 1rem; background: transparent; justify-content: center; margin-bottom: 1.5rem; border-bottom: 1px solid #E5E7EB; padding-bottom: 0.5rem;}
-    .stTabs [data-baseweb="tab"] {
-        background-color: transparent;
-        border: none;
-        padding: 0.5rem 1rem;
-        color: #6B7280 !important;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-    .stTabs [aria-selected="true"] {
-        color: #111827 !important;
-        border-bottom: 2px solid #111827 !important;
-    }
+    .stTabs [data-baseweb="tab"] { background-color: transparent; border: none; padding: 0.5rem 1rem; color: #6B7280 !important; font-weight: 500; transition: all 0.2s; }
+    .stTabs [aria-selected="true"] { color: #111827 !important; border-bottom: 2px solid #111827 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -129,10 +82,35 @@ def get_yt_data(v_id):
         except Exception as e:
             return str(e), False
 
+def transcribe_audio_video_with_ai(file_path):
+    """Sfrutta Gemini per ascoltare e trascrivere file multimediali"""
+    try:
+        # Carica il file temporaneo su Gemini
+        uploaded_file = genai.upload_file(file_path)
+        
+        # Se è un video, Gemini ha bisogno di qualche secondo per processarlo
+        while uploaded_file.state.name == 'PROCESSING':
+            time.sleep(2)
+            uploaded_file = genai.get_file(uploaded_file.name)
+            
+        if uploaded_file.state.name == 'FAILED':
+            return "Errore: Elaborazione del file multimediale fallita da parte dell'IA."
+        
+        # Prompt diretto per la trascrizione fedele
+        prompt = "Sei un trascrittore esperto. Ascolta/Guarda questo file e scrivi l'esatta trascrizione parola per parola in lingua originale. Non riassumere. Se non c'è voce, scrivi 'Nessun parlato rilevato'."
+        response = model.generate_content([uploaded_file, prompt])
+        
+        # Cancella il file dai server di Google per privacy
+        genai.delete_file(uploaded_file.name)
+        
+        return response.text
+    except Exception as e:
+        return f"Errore durante la trascrizione IA: {str(e)}"
+
 def process_with_ai(text, mode, language):
     if not text.strip(): return "Errore: Testo vuoto."
     prompts = {
-        "Pulizia Rigorosa": "Sei un editor. Pulisci il testo da errori, tic verbali e timestamp. Mantieni il significato esatto. Formatta con cura.",
+        "Pulizia Rigorosa": "Sei un editor. Pulisci il testo da errori, tic verbali e timestamp. Mantieni il significato esatto. Formatta con cura in paragrafi.",
         "Riassunto TL;DR": "Sei un analista. Crea un riassunto diretto: 1 paragrafo introduttivo e una lista puntata dei concetti chiave.",
         "Articolo Blog SEO": "Sei un Copywriter. Trasforma questa trascrizione in un articolo strutturato (Titolo H1, introduzione, paragrafi con H2).",
         "Post LinkedIn/X": "Sei un Social Media Manager. Crea un post professionale estraendo il concetto migliore. Usa un hook, paragrafi brevi e hashtag pertinenti.",
@@ -153,12 +131,12 @@ if 'ai_result' not in st.session_state: st.session_state['ai_result'] = ""
 spacer_left, main_col, spacer_right = st.columns([1, 8, 1])
 
 with main_col:
-    # --- HERO SECTION MINIMALISTA ---
+    # --- HERO SECTION ---
     st.markdown("""
         <div style="text-align: center; padding: 2.5rem 0 3.5rem 0;">
             <h1 style='font-size: 3rem; margin-bottom: 0.5rem; color: #111827;'>CleanScript AI</h1>
             <p style='font-size: 1.1rem; color: #6B7280; max-width: 600px; margin: 0 auto;'>
-                L'editor intelligente per testi grezzi, video e documenti.
+                L'editor intelligente per testi, audio e video.
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -169,18 +147,15 @@ with main_col:
     # --- EMPTY STATE ---
     if not st.session_state['raw_text']:
         f1, f2, f3 = st.columns(3)
-        with f1:
-            st.markdown('<div class="feature-box"><div class="feature-icon">▶️</div><div class="feature-title">Estrai da Video</div><div class="feature-desc">Incolla un link YouTube per ottenere la trascrizione.</div></div>', unsafe_allow_html=True)
-        with f2:
-            st.markdown('<div class="feature-box"><div class="feature-icon">📄</div><div class="feature-title">Leggi Documenti</div><div class="feature-desc">Carica PDF o file Word da elaborare.</div></div>', unsafe_allow_html=True)
-        with f3:
-            st.markdown('<div class="feature-box"><div class="feature-icon">🧠</div><div class="feature-title">Motore IA</div><div class="feature-desc">Formatta, traduci e riassumi in pochi secondi.</div></div>', unsafe_allow_html=True)
+        with f1: st.markdown('<div class="feature-box"><div class="feature-icon">▶️</div><div class="feature-title">Estrai da YouTube</div><div class="feature-desc">Incolla un link per la trascrizione.</div></div>', unsafe_allow_html=True)
+        with f2: st.markdown('<div class="feature-box"><div class="feature-icon">🎙️</div><div class="feature-title">Trascrivi Audio/Video</div><div class="feature-desc">Carica MP3 o MP4 per la trascrizione IA.</div></div>', unsafe_allow_html=True)
+        with f3: st.markdown('<div class="feature-box"><div class="feature-icon">🧠</div><div class="feature-title">Motore IA</div><div class="feature-desc">Formatta, traduci e riassumi in secondi.</div></div>', unsafe_allow_html=True)
         st.write("")
 
     # --- AREA INPUT ---
     st.markdown('<div class="clean-card">', unsafe_allow_html=True)
     
-    tab_yt, tab_file, tab_manual = st.tabs(["Link YouTube", "Carica File", "Incolla Testo"])
+    tab_yt, tab_file, tab_manual = st.tabs(["Link YouTube", "Carica File (Testo/Audio/Video)", "Incolla Testo"])
 
     with tab_yt:
         col_url, col_btn = st.columns([3, 1])
@@ -195,17 +170,42 @@ with main_col:
                             st.session_state['raw_text'] = testo
                             st.rerun()
                         else:
-                            st.error("⚠️ YouTube ha bloccato questo video.")
-                            st.info("Copia la trascrizione direttamente da YouTube e usa il tab 'Incolla Testo'.")
+                            st.error("⚠️ YouTube ha bloccato questo video. Copia la trascrizione e usa 'Incolla Testo'.")
                 else: st.error("Link non valido.")
 
     with tab_file:
-        up_file = st.file_uploader("Trascina qui PDF, DOCX o TXT", type=['pdf', 'docx', 'txt'], label_visibility="collapsed")
-        if up_file and st.button("Leggi Documento"):
-            with st.spinner('Lettura in corso...'):
-                if up_file.type == "application/pdf": st.session_state['raw_text'] = "".join([p.extract_text() for p in PdfReader(up_file).pages])
-                elif up_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document": st.session_state['raw_text'] = " ".join([p.text for p in Document(up_file).paragraphs])
-                else: st.session_state['raw_text'] = up_file.read().decode("utf-8")
+        # Aggiunti formati multimediali
+        up_file = st.file_uploader("Trascina qui PDF, DOCX, TXT, MP3, WAV, M4A o MP4", type=['pdf', 'docx', 'txt', 'mp3', 'wav', 'm4a', 'mp4'], label_visibility="collapsed")
+        if up_file and st.button("Elabora Documento / Media"):
+            file_type = up_file.type
+            
+            with st.spinner("Analisi del file in corso (per audio/video potrebbe volerci un minuto)..."):
+                # --- GESTIONE FILE TESTUALI ---
+                if file_type == "application/pdf": 
+                    st.session_state['raw_text'] = "".join([p.extract_text() for p in PdfReader(up_file).pages])
+                elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document": 
+                    st.session_state['raw_text'] = " ".join([p.text for p in Document(up_file).paragraphs])
+                elif file_type.startswith("text/"): 
+                    st.session_state['raw_text'] = up_file.read().decode("utf-8")
+                    
+                # --- GESTIONE FILE AUDIO/VIDEO TRAMITE GEMINI ---
+                elif file_type.startswith("audio/") or file_type.startswith("video/"):
+                    if ai_ready:
+                        # 1. Salva il file temporaneamente sul server
+                        temp_ext = "." + up_file.name.split('.')[-1]
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=temp_ext) as tmp_file:
+                            tmp_file.write(up_file.getvalue())
+                            tmp_path = tmp_file.name
+                        
+                        # 2. Invia all'IA per la trascrizione
+                        transcription_result = transcribe_audio_video_with_ai(tmp_path)
+                        st.session_state['raw_text'] = transcription_result
+                        
+                        # 3. Elimina il file temporaneo dal server per pulizia
+                        os.remove(tmp_path)
+                    else:
+                        st.error("⚠️ La trascrizione audio/video richiede che la chiave API Gemini sia configurata correttamente.")
+                        
                 st.rerun()
 
     with tab_manual:
@@ -221,6 +221,10 @@ with main_col:
         st.markdown('<div class="clean-card">', unsafe_allow_html=True)
         st.markdown("<h3 style='margin-bottom: 1.5rem; font-size: 1.25rem;'>Configurazione Output</h3>", unsafe_allow_html=True)
         
+        # Mostra in anteprima i primi 200 caratteri di ciò che è stato estratto/trascritto
+        with st.expander("👀 Mostra il testo grezzo estratto/trascritto"):
+            st.write(st.session_state['raw_text'])
+
         c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
             ai_mode = st.selectbox("Formato desiderato:", ["Pulizia Rigorosa", "Riassunto TL;DR", "Articolo Blog SEO", "Post LinkedIn/X", "Meeting (Action Items)"], label_visibility="collapsed")
@@ -228,7 +232,7 @@ with main_col:
             ai_lang = st.selectbox("Lingua:", ["Italiano", "English", "Español", "Français"], label_visibility="collapsed")
         with c3:
             if st.button("Genera", use_container_width=True):
-                with st.spinner("Elaborazione in corso..."):
+                with st.spinner("Elaborazione IA in corso..."):
                     clean_raw = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', st.session_state['raw_text'])
                     st.session_state['ai_result'] = process_with_ai(clean_raw, ai_mode, ai_lang)
         st.markdown('</div>', unsafe_allow_html=True)

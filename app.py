@@ -61,7 +61,8 @@ st.markdown("""
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Aggiungiamo "-latest" al nome del modello per bypassare l'errore 404
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
     ai_ready = True
 except Exception as e:
     ai_ready = False

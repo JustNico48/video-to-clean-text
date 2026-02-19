@@ -58,14 +58,30 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- SETUP INTELLIGENZA ARTIFICIALE ---
+# --- SETUP INTELLIGENZA ARTIFICIALE ---
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=API_KEY)
-    # Aggiungiamo "-latest" al nome del modello per bypassare l'errore 404
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    
+    # 1. Chiediamo a Google quali modelli sono disponibili per questa chiave
+    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    
+    # 2. Scegliamo dinamicamente il migliore in ordine di potenza/velocità
+    if 'models/gemini-1.5-flash' in available_models:
+        best_model = 'gemini-1.5-flash'
+    elif 'models/gemini-1.5-pro' in available_models:
+        best_model = 'gemini-1.5-pro'
+    elif 'models/gemini-pro' in available_models: # Versione ultra-stabile precedente
+        best_model = 'gemini-pro'
+    else:
+        # Piano di emergenza assoluto: prende il primo modello testuale che trova
+        best_model = available_models[0].replace('models/', '')
+        
+    model = genai.GenerativeModel(best_model)
     ai_ready = True
 except Exception as e:
     ai_ready = False
+    st.error(f"Errore di configurazione API: {e}")
 
 # --- FUNZIONI DI ESTRAZIONE ---
 def extract_yt_id(url):

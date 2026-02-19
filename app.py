@@ -1,106 +1,104 @@
 import streamlit as st
+import re
 
 # 1. Configurazione della pagina
-st.set_page_config(page_title="CleanScript AI", page_icon="🪄", layout="wide")
+st.set_page_config(page_title="CleanScript AI 2.0", page_icon="🪄", layout="wide")
 
-# 2. UI Styling (Look professionale e pulito)
+# 2. Design Avanzato
 st.markdown("""
     <style>
-    .main { background-color: #ffffff; }
+    .main { background-color: #f4f7f6; }
     .stButton>button { 
-        background: linear-gradient(45deg, #007bff, #6610f2); 
-        color: white; 
-        font-weight: bold;
-        border: none;
-        transition: 0.3s;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+        color: white; border: none; padding: 10px 20px; border-radius: 8px;
+        font-weight: bold; width: 100%; transition: 0.3s;
     }
-    .stButton>button:hover { transform: scale(1.02); }
-    .stTextArea textarea { border: 1px solid #e0e0e0; border-radius: 10px; }
+    .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+    .stats-box { background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Struttura della Dashboard
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    st.title("🪄 CleanScript AI")
-    st.write("Trasforma le tue trascrizioni disordinate in contenuti pronti per essere pubblicati.")
-    
-    # Area di input per l'utente
-    raw_input = st.text_area(
-        "Incolla qui il testo (con timestamp, nomi speaker o errori):", 
-        height=450, 
-        placeholder="00:12 Benvenuti nel video... [00:45] Speaker 1: Grazie per essere qui..."
-    )
-
-with col2:
-    st.header("Impostazioni")
-    language = st.selectbox("Lingua Originale", ["Italiano", "English", "Español", "Français"])
-    
-    output_style = st.radio(
-        "Converti in:",
-        [
-            "Testo Pulito (Senza numeri/tempi)", 
-            "Articolo Blog (SEO)", 
-            "Thread LinkedIn/X", 
-            "Riassunto per Punti"
-        ]
-    )
-    
-    st.divider()
-    
-    # Sezione Monetizzazione/Supporto
-    st.markdown("### 💎 Supporta il Progetto")
-    st.write("Se questo tool ti ha risparmiato ore di lavoro, offrimi un caffè!")
-    st.markdown("[☕ Offrimi un caffè (PayPal)](https://www.paypal.me/tuo-link)") # Sostituisci con il tuo link
-    
-    st.info("💡 **Tip:** Per risultati migliori, incolla trascrizioni generate da YouTube o Zoom.")
-
-# 4. Motore di Elaborazione (Logica AI-lite)
-def process_text(text, style):
-    import re
-    
-    # Rimozione dei timestamp (es: 00:00, [00:00], 00:00:00)
+# 3. Funzioni Logiche
+def clean_professional(text):
+    # Rimuove Timestamp
     text = re.sub(r'\[?\d{1,2}:\d{2}(:\d{2})?\]?', '', text)
-    
-    # Rimozione etichette speaker (es: Speaker 1:, Speaker A:)
-    text = re.sub(r'Speaker\s[A-Z\d]:', '', text, flags=re.IGNORECASE)
-    
-    # Pulizia spazi e a capo doppi
+    # Rimuove Filler Words (parole di riempimento)
+    fillers = [r'\behm\b', r'\buhm\b', r'\bcioè\b', r'\bpraticamente\b', r'\bdiciamo\b', r'\ballora\b']
+    for f in fillers:
+        text = re.sub(f, '', text, flags=re.IGNORECASE)
+    # Pulizia spazi
     text = " ".join(text.split())
-    
-    # Formattazione in base allo stile scelto
-    if style == "Articolo Blog (SEO)":
-        return f"# ANALISI APPROFONDITA\n\n## Introduzione\n{text[:500]}...\n\n## Punti Trattati\n{text[500:1200]}...\n\n---\n*Generato da CleanScript AI*"
-    
-    elif style == "Thread LinkedIn/X":
-        return f"🧵 NUOVO INSIGHT\n\n{text[:250]}...\n\n👇 Scopri di più nel link in bio.\n#contentcreator #ai"
-    
-    elif style == "Riassunto per Punti":
-        summary_points = text[:1000].split('. ')
-        points_str = "\n".join([f"- {p.strip()}" for p in summary_points[:5] if len(p) > 10])
-        return f"📝 RIASSUNTO VELOCE:\n\n{points_str}"
-    
     return text
 
-# 5. Pulsante di Azione e Risultato
-if st.button("✨ ELABORA TESTO"):
-    if raw_input:
-        with st.spinner('Pulizia in corso...'):
-            processed = process_text(raw_input, output_style)
-            st.success("Testo pronto!")
-            st.text_area("Copia il risultato:", processed, height=300)
-            
-            # Bottone di download
-            st.download_button(
-                label="📥 Scarica come .txt",
-                data=processed,
-                file_name="cleanscript_output.txt",
-                mime="text/plain"
-            )
-    else:
-        st.error("Ops! Incolla prima del testo nell'area a sinistra.")
+def get_stats(text):
+    words = len(text.split())
+    reading_time = max(1, round(words / 200))
+    return words, reading_time
 
-# 6. Footer (Chiusura file)
-st.markdown("---")
-st.caption("© 2026 CleanScript AI | Privacy: Nessun testo viene salvato sui nostri server.")
+# 4. Interfaccia Utente
+st.title("🪄 CleanScript AI 2.0")
+st.markdown("### Lo strumento gratuito per pulire trascrizioni e creare contenuti")
+
+tab1, tab2 = st.tabs(["🚀 Strumento", "📖 Come Funziona"])
+
+with tab1:
+    col_in, col_out = st.columns([1, 1])
+    
+    with col_in:
+        st.markdown("#### 1. Incolla il testo")
+        raw_text = st.text_area("Trascrizione grezza da YouTube, Zoom o Podcast:", height=400)
+        
+        mode = st.selectbox("Trasforma in:", 
+            ["Testo Pulito (Senza rumore)", "Articolo Blog SEO", "Post Social (LinkedIn/X)", "Summary Esecutivo"])
+        
+        process_btn = st.button("PULISCI TESTO ✨")
+
+    with col_out:
+        st.markdown("#### 2. Risultato Elaborato")
+        if process_btn and raw_text:
+            cleaned = clean_professional(raw_text)
+            
+            # Statistiche
+            w_count, r_time = get_stats(cleaned)
+            st.markdown(f"""
+            <div class="stats-box">
+                📊 <b>Statistiche:</b> {w_count} parole | ⏱️ <b>Tempo di lettura:</b> {r_time} min
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Formattazione finale basata sulla scelta
+            if mode == "Articolo Blog SEO":
+                final_out = f"# TITOLO: {cleaned[:50]}...\n\n## Introduzione\n{cleaned[:300]}...\n\n## Analisi\n{cleaned[300:]}"
+            elif mode == "Post Social (LinkedIn/X)":
+                final_out = f"🚀 INSIGHT ESTRATTO:\n\n{cleaned[:280]}...\n\n#content #ai #productivity"
+            else:
+                final_out = cleaned
+                
+            st.text_area("Copia il risultato:", final_out, height=330)
+            st.download_button("📥 Scarica .txt", final_out, file_name="cleanscript_v2.txt")
+        else:
+            st.info("Incolla un testo a sinistra e premi il tasto per vedere la magia.")
+
+with tab2:
+    st.markdown("""
+    **Perché usare CleanScript?**
+    * **Rimozione Automatica:** Eliminiamo timestamp e nomi speaker in un secondo.
+    * **IA-Ready:** Il testo pulito è perfetto per essere dato in pasto a ChatGPT o Claude senza errori.
+    * **Privacy 100%:** Non salviamo nulla. Il tuo testo resta nel tuo browser.
+    
+    **Vuoi supportarci?**
+    Se risparmi tempo ogni giorno, considera di offrirci un caffè per mantenere il server gratuito!
+    """)
+    st.markdown("[☕ Offrimi un caffè](https://www.buymeacoffee.com/tuo-username)")
+
+# 5. Sidebar Monetizzazione
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/2103/2103633.png", width=100)
+    st.header("CleanScript Pro")
+    st.write("Stiamo lavorando alla versione con upload diretto di file MP3 e traduzione automatica.")
+    st.text_input("Lascia la tua email per la Beta:")
+    if st.button("Iscrivimi"):
+        st.toast("Grazie! Ti avviseremo presto.")
+    
+    st.divider()
+    st.caption("Creato per Content Creator indipendenti.")

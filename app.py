@@ -64,9 +64,20 @@ def extract_id(url):
 
 def get_yt_data(v_id):
     try:
-        t_list = YouTubeTranscriptApi.get_transcript(v_id, languages=['it', 'en', 'es', 'fr', 'de'])
+        # Tentativo 1: Cerca sottotitoli standard in italiano o inglese
+        t_list = YouTubeTranscriptApi.get_transcript(v_id, languages=['it', 'en'])
         return " ".join([t['text'] for t in t_list])
-    except: return None
+    except:
+        try:
+            # Tentativo 2: Se fallisce, cerca QUALSIASI sottotitolo disponibile (anche automatico)
+            transcript_list = YouTubeTranscriptApi.list_transcripts(v_id)
+            # Prende la prima lingua disponibile nella lista forzatamente
+            first_transcript = next(iter(transcript_list))
+            t_list = first_transcript.fetch()
+            return " ".join([t['text'] for t in t_list])
+        except Exception as e:
+            # Se YouTube blocca totalmente l'accesso (es. blocco 18+ severo)
+            return None
 
 # --- SIDEBAR: STRUMENTI DI TESTO AVANZATI ---
 with st.sidebar:

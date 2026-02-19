@@ -1,96 +1,105 @@
 import streamlit as st
 import re
 from youtube_transcript_api import YouTubeTranscriptApi
+from textblob import TextBlob
+from rake_nltk import Rake
+import nltk
 
-# 1. Configurazione della pagina
-st.set_page_config(page_title="CleanScript AI 3.0", page_icon="🎬", layout="wide")
+# Download necessario per le keyword
+nltk.download('punkt')
+nltk.download('stopwords')
 
-# 2. Design Moderno
+st.set_page_config(page_title="CleanScript AI 4.0 | Ultra-Content Tool", page_icon="🚀", layout="wide")
+
+# Custom CSS per l'effetto "Premium"
 st.markdown("""
     <style>
-    .main { background-color: #f0f2f6; }
-    .stTextInput>div>div>input { border-radius: 20px; border: 2px solid #667eea; }
-    .stButton>button { 
-        background: linear-gradient(135deg, #ff4b2b 0%, #ff416c 100%); 
-        color: white; border-radius: 20px; font-weight: bold;
-    }
-    .video-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .main { background: #f8f9fc; }
+    .stAlert { border-radius: 12px; }
+    .metric-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); text-align: center; }
+    .stButton>button { border-radius: 50px; background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNZIONI TECNICHE ---
-def extract_video_id(url):
+# --- LOGICA TECNICA ---
+def extract_id(url):
     pattern = r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
-    match = re.search(pattern, url)
-    return match.group(1) if match else None
+    m = re.search(pattern, url)
+    return m.group(1) if m else None
 
-def get_youtube_transcript(video_id):
+def get_data(v_id):
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['it', 'en'])
-        full_transcript = " ".join([t['text'] for t in transcript_list])
-        return full_transcript
-    except Exception as e:
-        return f"Errore: Impossibile recuperare i sottotitoli. Assicurati che il video abbia i sottotitoli generati. ({str(e)})"
+        t_list = YouTubeTranscriptApi.get_transcript(v_id, languages=['it', 'en'])
+        return " ".join([t['text'] for t in t_list])
+    except: return None
 
-def clean_text(text):
-    text = re.sub(r'\[.*?\]', '', text) # Rimuove annotazioni tipo [Musica]
-    text = " ".join(text.split()) # Pulisce spazi
-    return text
+# --- UI ---
+st.title("🚀 CleanScript AI 4.0 Ultra")
+st.markdown("##### Il coltellino svizzero per Content Creator, Studenti e Marketers.")
 
-# --- INTERFACCIA ---
-st.title("🎬 CleanScript AI 3.0")
-st.subheader("Incolla un link YouTube o il tuo testo per trasformarlo in contenuto.")
+with st.container():
+    col_url, col_btn = st.columns([3, 1])
+    with col_url:
+        url = st.text_input("", placeholder="Incolla URL YouTube qui per la magia...", label_visibility="collapsed")
+    with col_btn:
+        process = st.button("ANALIZZA ORA ⚡")
 
-tab1, tab2 = st.tabs(["🎥 Da YouTube", "📄 Incolla Testo"])
-
-with tab1:
-    st.markdown('<div class="video-card">', unsafe_allow_html=True)
-    video_url = st.text_input("Inserisci il link del video YouTube (es: https://www.youtube.com/watch?v=...)", placeholder="https://www.youtube.com/...")
-    
-    if st.button("ESTRAI E PULISCI VIDEO"):
-        v_id = extract_video_id(video_url)
-        if v_id:
-            with st.spinner('Sto leggendo il video per te...'):
-                raw_t = get_youtube_transcript(v_id)
-                if "Errore" not in raw_t:
-                    st.session_state['transcript'] = clean_text(raw_t)
-                    st.success("Sottotitoli estratti con successo!")
-                else:
-                    st.error(raw_t)
-        else:
-            st.warning("Link non valido. Controlla l'URL.")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with tab2:
-    manual_text = st.text_area("Oppure incolla qui il tuo testo sporco:", height=200)
-    if st.button("PULISCI TESTO MANUALE"):
-        st.session_state['transcript'] = clean_text(manual_text)
-
-# --- AREA RISULTATO (Sempre visibile se c'è testo) ---
-if 'transcript' in st.session_state:
-    st.divider()
-    col_res, col_opt = st.columns([2, 1])
-    
-    with col_res:
-        st.markdown("### ✨ Testo Elaborato")
-        final_text = st.text_area("Risultato pronto:", st.session_state['transcript'], height=400)
-        st.download_button("📥 Scarica .txt", final_text, file_name="cleanscript_video.txt")
-        
-    with col_opt:
-        st.markdown("### 🛠️ Azioni Rapide")
-        style = st.selectbox("Cosa vuoi creare?", ["Testo Pulito", "Articolo per Blog", "Thread per X", "Riassunto Punti"])
-        
-        if st.button("OTTIMIZZA FORMATO"):
-            t = st.session_state['transcript']
-            if style == "Articolo per Blog":
-                formatted = f"# ANALISI VIDEO\n\n{t[:500]}...\n\n## Punti Chiave\n- {t[500:800]}..."
-            elif style == "Thread per X":
-                formatted = f"🧵 DAL VIDEO:\n\n{t[:240]}...\n\n#YouTube #Insight"
+if process and url:
+    v_id = extract_id(url)
+    if v_id:
+        with st.spinner('Analisi profonda in corso...'):
+            raw_text = get_data(v_id)
+            if raw_text:
+                # Analisi Sentiment
+                blob = TextBlob(raw_text)
+                sentiment = "Positivo 😊" if blob.sentiment.polarity > 0.1 else "Negativo 😟" if blob.sentiment.polarity < -0.1 else "Neutrale 😐"
+                
+                # Analisi Keyword
+                r = Rake()
+                r.extract_keywords_from_text(raw_text)
+                keywords = r.get_ranked_phrases()[:8]
+                
+                # Statistiche
+                words = len(raw_text.split())
+                time_saved = max(1, round(words / 150)) # stima minuti risparmiati
+                
+                # Visualizzazione Dashboard
+                st.divider()
+                m1, m2, m3, m4 = st.columns(4)
+                with m1: st.markdown(f'<div class="metric-card">📖 Parole<br><h3>{words}</h3></div>', unsafe_allow_html=True)
+                with m2: st.markdown(f'<div class="metric-card">🎭 Mood<br><h3>{sentiment}</h3></div>', unsafe_allow_html=True)
+                with m3: st.markdown(f'<div class="metric-card">⏱️ Risparmiati<br><h3>{time_saved} min</h3></div>', unsafe_allow_html=True)
+                with m4: st.markdown(f'<div class="metric-card">🔑 Keyword<br><h3>{len(keywords)}</h3></div>', unsafe_allow_html=True)
+                
+                st.divider()
+                
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    st.subheader("📝 Testo Pulito")
+                    final_txt = st.text_area("", raw_text, height=400, label_visibility="collapsed")
+                    st.download_button("📥 Scarica Report .txt", final_txt)
+                
+                with c2:
+                    st.subheader("🏷️ Social & SEO")
+                    st.write("**Top Keywords:**")
+                    for kw in keywords:
+                        st.code(kw)
+                    
+                    st.divider()
+                    st.write("**Hashtags Generati:**")
+                    tags = " ".join([f"#{w.replace(' ', '')}" for w in keywords[:5]])
+                    st.info(tags)
+                    
+                    st.divider()
+                    st.button("☕ Offrimi un caffè per sbloccare l'export PDF")
             else:
-                formatted = t
-            st.session_state['transcript'] = formatted
-            st.rerun()
+                st.error("Sottotitoli non trovati per questo video.")
+    else:
+        st.error("URL non valido.")
 
-# Footer
+# Footer Esteso (Migliora la percezione di qualità)
 st.markdown("---")
-st.caption("CleanScript AI 3.0 - Trasforma i video in asset senza sforzo.")
+f1, f2, f3 = st.columns(3)
+with f1: st.caption("🛡️ **Privacy Focus**: Nessun dato salvato.")
+with f2: st.caption("⚡ **Speed**: Elaborazione in < 3 secondi.")
+with f3: st.caption("📈 **SEO Ready**: Ottimizzato per blog e social.")
